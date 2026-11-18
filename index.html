@@ -66,7 +66,17 @@ header { background: var(--surface); border-bottom: 1px solid var(--line); paddi
 .acc-v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .meter { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin: 4px 0 2px; }
 .meter i { display: block; height: 100%; background: var(--gc); border-radius: 3px; }
-.pl-note { white-space: normal; min-width: 240px; max-width: 340px; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.pl-note { white-space: normal; min-width: 150px; max-width: 180px; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+main.wide { max-width: none; }
+.pl-table { font-size: 12.5px; }
+.pl-table th, .pl-table td { padding: 4px 5px; }
+.pl-table th { white-space: normal; }
+.pl-table tr > :nth-child(1) { position: sticky; left: 0; z-index: 2; background: var(--surface); width: 64px; min-width: 64px; }
+.pl-table tr > :nth-child(2) { position: sticky; left: 64px; z-index: 2; background: var(--surface); box-shadow: 1px 0 0 var(--line); }
+.pl-table th:nth-child(1), .pl-table th:nth-child(2) { background: var(--surface-2); z-index: 3; }
+.pl-table tr.sec > :nth-child(1) { background: var(--sub); }
+.pl-table tr.tot > :nth-child(1), .pl-table tr.tot > :nth-child(2) { background: var(--tot); }
+.pl-table tr:hover > :nth-child(1), .pl-table tr:hover > :nth-child(2) { background: var(--row-hl); }
 .pl-users { margin: 3px 0; }
 .pl-users .tag { font-size: 11px; margin: 0 3px 2px 0; }
 .tag.on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -421,6 +431,7 @@ function render() {
     ? "資料來源：財務處 115 年 1-10 月綜合損益表（公司別、部門別）"
     : "預算：營運預算系統 FY2027 " + S.scen + "；實際：" + (c ? "已匯入至 " + c + " 月" : "尚未匯入（請至「資料管理」匯入會計月報）"));
   coaUsers.c = {};
+  main.classList.toggle("wide", S.tab === "pl");
   charts.forEach(ch => ch.destroy()); charts = [];
   const f = VIEWS[S.tab]; main.innerHTML = banner() + f();
   if (AFTER[S.tab]) AFTER[S.tab]();
@@ -630,20 +641,20 @@ VIEWS.pl = () => {
   const sec = key => {
     const list = COA.filter(a => a.sec === key && [P, PB, Ac, full].concat(colData).some(h => h && h[a.code]));
     body += `<tr class="sec"><td colspan="${cols.length + (is27 ? 8 : 4) + (showNote ? 1 : 0)}">${SEC_NAME[key]}</td></tr>`;
-    list.forEach(a => { body += `<tr><td class="code">${a.code}</td><td class="l" title="${esc(a.desc)}">${a.name}</td>${showNote ? noteCell(a) : ""}${cells(h => (h && h[a.code]) || 0, a.sec)}</tr>`; });
+    list.forEach(a => { body += `<tr><td class="code">${a.code}</td><td class="l" title="${esc(a.desc + (COA_TIPS[a.code] ? "｜提醒：" + COA_TIPS[a.code] : ""))}">${a.name}</td>${showNote ? noteCell(a) : ""}${cells(h => (h && h[a.code]) || 0, a.sec)}</tr>`; });
   };
   sec("rev"); tot("營業收入淨額", "rev", "rev"); sec("cogs"); tot("營業成本合計", "cogs", "cogs"); tot("營業毛利", "gp", "res");
   sec("opx"); tot("營業費用合計", "opx", "opx"); tot("營業淨利", "op", "res"); sec("nin"); sec("nex"); tot("稅前淨利", "pbt", "res");
   // 備註欄：白話用途＋相關處（2026 有入帳或 2027 有預算的處）＋提醒
   function noteCell(a) {
     const us = coaUsers(a.code), mine = depts ? depts.filter(x => us.indexOf(x) >= 0) : [];
-    return `<td class="l pl-note"><div>${esc(a.desc)}</div><div class="pl-users">${us.map(x => `<span class="tag${mine.indexOf(x) >= 0 ? " on" : ""}">${x}</span>`).join("") || '<span class="muted">尚無處使用</span>'}</div>${COA_TIPS[a.code] ? `<div class="muted">${esc(COA_TIPS[a.code])}</div>` : ""}</td>`;
+    return `<td class="l pl-note"><div>${esc(a.desc)}</div><div class="pl-users">${us.map(x => `<span class="tag${mine.indexOf(x) >= 0 ? " on" : ""}">${x}</span>`).join("") || '<span class="muted">尚無處使用</span>'}</div></td>`;
   }
   return `<div class="card"><h3>損益明細（依財務處會計科目）｜${esc(S.scope)}</h3>
   <p class="hint">${is27 ? `月份欄：已結帳月顯示實際（黑字），未結帳月顯示預算（灰色斜體）＝滾動預估。差異以「實際－預算」計，綠色有利、紅色不利。全年預估＝已結帳實際＋未來月份預算。` :
-    `排列與財務處綜合損益表相同，可逐科目核對。「說明／相關處」欄列出每個科目的白話用途與會用到它的處（深色＝目前所選範圍），可用右上角的開關隱藏。${depts ? "部門別：1-2 月尚未分部門（各處空白）；3-9 月為各月部門損益表；10 月＝1-10 月累計減 3-9 月，含月報印出後的前期調整（詳見資料管理）。" : "10 月含 1-10 月累計報表的前期調整。"} 6010 薪資支出一律為不含獎金、特休的本薪。`}</p>
+    `排列與財務處綜合損益表相同，可逐科目核對。「說明／相關處」欄列出白話用途與會用到它的處（深色＝目前所選範圍），滑鼠停在科目名稱上可看提醒；欄位可用右上角開關隱藏。${depts ? "部門別：1-2 月尚未分部門（各處空白）；3-9 月為各月部門損益表；10 月＝1-10 月累計減 3-9 月，含月報印出後的前期調整（詳見資料管理）。" : "10 月含 1-10 月累計報表的前期調整。"} 6010 薪資支出一律為不含獎金、特休的本薪。`}</p>
   <div class="row" style="justify-content:flex-end;margin:-4px 0 8px"><label class="small" style="flex-direction:row;display:flex;gap:6px;align-items:center"><input type="checkbox" id="plNote" ${showNote ? "checked" : ""}> 顯示「說明／相關處」欄</label></div>
-  <div class="tablewrap"><table>${head}${body}</table></div></div>` + plChartsHtml();
+  <div class="tablewrap"><table class="pl-table${showNote ? " has-note" : ""}">${head}${body}</table></div></div>` + plChartsHtml();
 };
 
 /* ---------- 損益明細下方：圖表分析模組 ---------- */
