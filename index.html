@@ -1,0 +1,1159 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>全居財務監控儀表板</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* 版面：頂部固定篩選列＋分頁，下方為卡片式資料區；色彩以財報藍為主色，狀態色另立 */
+:root {
+  color-scheme: light;
+  --bg: #f4f3ef; --surface: #fcfcfb; --surface-2: #f0efec; --line: #dddcd6;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #807f79;
+  --accent: #1c5cab; --accent-soft: #e3eefb;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b;
+  --good-text: #006300; --crit-text: #b02a2a;
+  --row-hl: #eef4fb; --sub: #e9eef5; --tot: #dfe8f1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #383835;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e86;
+    --accent: #6da7ec; --accent-soft: #1d2b3d;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+    --good-text: #4fcf4f; --crit-text: #ff8a8a;
+    --row-hl: #1f2a37; --sub: #22262c; --tot: #263241;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #383835;
+  --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e86;
+  --accent: #6da7ec; --accent-soft: #1d2b3d;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+  --good-text: #4fcf4f; --crit-text: #ff8a8a;
+  --row-hl: #1f2a37; --sub: #22262c; --tot: #263241;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+header { background: var(--surface); border-bottom: 1px solid var(--line); padding-block: 14px 10px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { border-radius: 999px; padding: 4px 14px; background: var(--surface-2); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.coa-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 14px; }
+.coa-sum > div { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.kv { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.pair { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.pair-h { font-weight: 600; }
+.pair-n { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cgroups { display: grid; gap: 14px; margin-top: 14px; }
+.cgroup { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--gc); border-radius: 10px; padding: 12px 16px 6px; }
+.cgroup-h { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: end; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.cgroup-h h3 { margin: 0; font-size: 15px; }
+.cgroup-t { display: flex; gap: 14px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.acc { display: grid; grid-template-columns: 82px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr); gap: 10px 16px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.acc:last-child { border-bottom: 0; }
+.acc-code { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--gc); font-weight: 600; padding-top: 2px; }
+.acc-name { font-weight: 600; margin-bottom: 2px; }
+.acc-tip { margin-top: 6px; padding: 6px 8px; background: var(--surface-2); border-radius: 6px; color: var(--text-2); }
+.acc-tip::before { content: "提醒｜"; font-weight: 600; color: var(--text); }
+.acc-v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.meter { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin: 4px 0 2px; }
+.meter i { display: block; height: 100%; background: var(--gc); border-radius: 3px; }
+.pl-note { white-space: normal; min-width: 240px; max-width: 340px; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.pl-users { margin: 3px 0; }
+.pl-users .tag { font-size: 11px; margin: 0 3px 2px 0; }
+.tag.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.acc-items .tag { margin: 3px 4px 0 0; }
+@media (max-width: 900px) { .acc { grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1fr); } .acc-main { grid-column: 2 / -1; } .acc-items { grid-column: 1 / -1; } }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+#toast { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(420px, calc(100% - 32px)); background: var(--text); color: var(--surface); padding: 10px 14px; border-radius: 8px; font-size: 13px; z-index: 20; white-space: pre-line; }
+select:disabled { opacity: .75; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font-size: 20px; margin: 0; }
+.brand .sub { color: var(--muted); font-size: 12.5px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 10px; align-items: end; }
+.filters label { display: flex; flex-direction: column; font-size: 11.5px; color: var(--text-2); gap: 3px; }
+select, input, textarea, button { font: inherit; color: var(--text); }
+select, input[type=text], input[type=number], textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+button { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:hover { border-color: var(--accent); }
+nav.tabs { display: flex; gap: 2px; margin-top: 12px; overflow-x: auto; }
+nav.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 12px; color: var(--text-2); white-space: nowrap; }
+nav.tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+main { padding-block: 18px 60px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); max-width: 1500px; margin: 0 auto; }
+.banner { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; color: var(--text-2); margin-bottom: 14px; }
+.grid { display: grid; gap: 14px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.two { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h3 { margin: 0 0 4px; font-size: 14.5px; }
+.card .hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.kpi .lab { font-size: 12px; color: var(--text-2); }
+.kpi .val { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.kpi .cmp { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.chartbox { position: relative; height: 290px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 13px; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { text-align: right; color: var(--text-2); font-weight: 500; background: var(--surface-2); position: sticky; top: 0; }
+th.l, td.l { text-align: left; } td { text-align: right; }
+tr.sec td { background: var(--sub); font-weight: 600; text-align: left; }
+tr.tot td { background: var(--tot); font-weight: 600; }
+tr:hover td { background: var(--row-hl); }
+td.code { color: var(--muted); text-align: left; font-size: 12px; }
+td.neg, span.neg { color: var(--crit-text); }
+td.pos, span.pos { color: var(--good-text); }
+td.est { color: var(--muted); font-style: italic; }
+.wrap { white-space: normal; min-width: 220px; }
+.ins { border-left: 4px solid var(--line); padding: 8px 12px; margin: 8px 0; background: var(--surface-2); border-radius: 0 8px 8px 0; }
+.ins.critical { border-left-color: var(--crit); } .ins.warning { border-left-color: var(--warn); } .ins.good { border-left-color: var(--good); } .ins.info { border-left-color: var(--s1); }
+.ins b { display: block; margin-bottom: 2px; }
+.tag { display: inline-block; font-size: 11.5px; padding: 0 7px; border-radius: 10px; border: 1px solid var(--line); color: var(--text-2); margin-right: 4px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 10px; }
+.muted { color: var(--muted); } .small { font-size: 12px; }
+textarea { width: 100%; min-height: 110px; }
+.hidden { display: none !important; }
+@media (max-width: 640px) { header, main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } .two { grid-template-columns: 1fr; } .kpi .val { font-size: 20px; } }
+body.locked header, body.locked main { display: none; }
+#loginBox { min-height: 100vh; display: grid; place-items: center; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+#loginBox form { width: 100%; max-width: 360px; }
+</style>
+</head>
+<body class="locked">
+<header>
+  <div class="brand"><h1>全居財務監控儀表板</h1><span class="sub" id="subline"></span></div>
+  <div class="filters">
+    <label>使用者角色<select id="fRole"></select></label>
+    <label>年度<select id="fYear"><option value="2026">2026（115年）實績</option><option value="2027">2027（116年）預算 vs 實際</option></select></label>
+    <label id="lScen">預算情境<select id="fScen"><option value="110M">110M（1E1）</option><option value="120M">120M（1E2）</option></select></label>
+    <label>範圍<select id="fScope"></select></label>
+    <label>期間<select id="fPeriod"></select></label>
+    <label>主題<select id="fTheme"><option value="">跟隨系統</option><option value="light">淺色</option><option value="dark">深色</option></select></label>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+<main id="main"></main>
+<div id="toast" hidden></div>
+
+<script>window.ENC = {"v":1,"iter":600000,"salt":"Q5YU3QuDCrEQDf6BNcIHyg==","iv":"T7J9C6ArRFTLw2/H","ct":"w6LGvLfW6g0ElJsXCobTvsTKJ/War+hq+OOrs4GEhygyxYPVRD7em2bwPHWq3kTAB4YyCHcdlSYHcaM3WpdDqF/b23Hqk1B/1nuqhdBy2cqhoh9Fq2ZHlVRb+2a7cihqx4npEgQfATR36mgWFYGXcuR8uaV5h6DU/u+klAbV4RTlhOp46fgSyop7gcg7/5FjBCTuWZKQWTd3OMZduLEpvQDupLohHch5OG5lVVQs9hNVH9q0QEKNlV9vt5ialMR0AewYv5lcIEoFgkTXLFu5bTmCekCJa8HKTS5v/dT6Qc3+iSdINHL+sTwbCjtboxY4XQgRy3Hnu38MBIvtCcO/ek/scw3v2h6UfKUQ/wgl+26+SywPqK+6YowQjqx48V3s6cXlQu+pZ46iRNaFxUsd98HXbVD5z0msxtIIO7UqHnlnRRyCTNewhYzL7j7AtgAvfoMRAfwXhkOddSLHYOaFUp6Zn/oEy8Aoq9hU1athP5YIc8DU6eW/9anJXzQ2aJYt4glkfj5QZlllEySS1avebT813sa8AKHxMAYWRWYVNgLl6jdFsC4s80pQkPoO+2pr0xphUV92z0ZdRnDbmm92vRpXd8pfwKPiLLQ3QA3Mi4e6/4enBZ00AiYbbmy8aa/GIXFBSO/CFDtlQZ8Pt7gV9xUwmqlD1AQQRJ0ABJZfjQc1f2z1oN5wOmioq87541onXQ1wAjmIN6gFHT0k+qDOhvT5iW6BYVT/KwLSeA/RQp6X84lMRzU4sT3VZ7WwNhOlHD5UBJikTqab89LP/0HqH/ol/+GgsmM4HiCzhxlGqLJGWKIJpJS2ZPUZbJGbH+xmruRRZ8qpfVl+6QVbTnJ53K/VnkSFs4hmf7thut8IW+6VFq+mKkpi8E9rjXew8AwTTTnnlxqtF8e7rhimjxMrrGK9gnWJOzXqyFLdHDdeD9op8GUkygYCSlQn3/l38rRlSn9HqWjt+41J0uji72ZSYlQiDihi6L33g8qkBKT53PxNQKlmcaMdhW7OSkKn9I8XvKP/TQFPSry8NAk88bxswnvJLL091n9RfX1TD5Iu+LpgpV+3vQngM6UFr92bHn9NnbocDkIN7v82SZTqGpKExQARP+yzDkkPA/4MXPLyWuRtUWmyzd0t9Bspv6Mf8gVIENcXX65e/0pXve8Zypbd9KqoEVeiq18V0LQ15B8y8TmcLFKlrLiydeLFxVIDaAwFcflnKx4DhimRdQiLXzKS1OUoCHUBJlaUowQNorDqTcodup5LcM3o5S2f7M7s546R3tG8Ey4aPD11RQLHKbMHdps6PVXXtOxFk+FM0guYwIiNdKpviaWhZnxSNeIY4Sq3aemT0Oj+r1UR6l2qHcvx27nus+2wJbAHihj5uQbdJxhg+EKQNwZzemw9oxG+qg2IgafxZX7yA7bSwzb38v6PgMru/7M3w6dmtJEf0umMisB+EMpueJaa09eG1M+qjwRjqp882MUx7391cyFap4KbQTkCdqlg0+L6ri9iTeTeZNI/mvA7brQ2NIlxJB4dGe92mSEBTCY8LXgUAr2TvFDgvYkkKCffupv/gCXLWkV5SvEZGoie103imYMAut+GVNcCu3jacZtpD+R1MAI32whdSRaqKjkCRV0zc0I0BfWyMRvNVGLRTfuRsz2aLcaTsDH5Yx5GrfD1W9cAHa9KnghWwB4zwdoQydCHL+PIwCMeLyD6rwRAZFqOSz2OamCqokPyjWEze39Q2OR9zIy4UR6IvXysYRLKxrmxi1VDDzy97sh8v2Q7TEdQzNzv/cUYtUGIAFydjPCimifle02PLw1XLJzqAyBBmeZ26VMs8q6fXKL5/o3O6tJddC0kwa+yzc+HoOqBpHI0Zx7quo3Z6AHuqKN25wgmXPoxI3XCkrFSNl3f0oFB8tuQvgtISjCJ0XvXGLrvH1SbZ8gmNuJglsO+xmWn3U7Y6JHyLx3ar85Ey+I4LAX76vACdaNz4ycr07qN3yHSllgKerMrJ81lOdl+YHG0wouM7l2icgP/qzF+XxSsVvBzq8LrU83zK5s9771RftyRhcW2jvANdP+I/pDtlHKyvdrHsD7BkpQeieTNzCGweThLUBV4M7gLEH5+jdah39fKGddwSpj4/S64JEcQFvhHOE97yMoH2B6wDh8jgXe6tjtbfFdK60pLtcKyuGwmGdxts5ZHCj53vmgApQ17ZGaQWRgxKbdsHDVblm1YF1fMNfIFgxkERtJknD5zZ2REhMF0s6KX63dQlA4+YaQ4gF6nzyto5Db77Y+jSDKPVz3FTwUqUhd3zCJKQbmgGFuYFcV2iLqPz7dYFvDH700/BzspxBt35UZy6eSq0SA2KV9E7JcuL12ury1/2dHO0hVz/DoFFRRJBnt6PqhlUzFBu3xIMLGZUIyk2HK8a5l2kV2ysPaI8Zzq4gIghYXoVF4rsqhcleLuxzozEQHNjM/Z2WsPlkmnrRw5bol4CpRSI9stT0NtTH6LcRYydmPYVeEIJ7eZwvIMm4vVDwUuPThCUrbRuwjj7j+3kZxUYlsZ3dw6AN3zZw/gNbH3KBh9Bsu8T0nzbfnu0jn3+MhY8uaFPC3jpt7s1ebuS2a6YOUMDmkeTyrvC+6su+LzbACcEuW3ZgJZR+jmJc0DZF5ZoRDj26tZHkBMHWJDZeBTVJj3d1dKus9Yz4qY10kE/qKLVsSFIvXKQuUf4NXeDB7oe9HSxnk8QjGNSYUtXdGShn9CNy2uxYIulnAgmWy/TW/+paEaaUeeChXIzekHgq4gAKQfTh/Tf6VQgTZylLiQhE79yVrDRxtwtiLH/dfYfz2hGqh7Ww16sB0NjGvaLBBSigcymvkYDrEZYMr27+yk+I72hhJohqqsVCbMEs7LuY/YSXsKKSh5BDKqR6cI8X8PEdvVykcYVZuFgs67gGXxMIbiuifI94pJnT2OzOrTNUUTUM7kKKmIxIemUH6m2Y1+40LDWIos7keRfQlDJQyK1uQm+Zi9ATW04JLRkEEsOPsAeFWB6CtiLeJM+30FB1pUltkEaD1rDQRGh7r1bVkj2USX9f4O0bcfzt/ULbgHrY8fvK7miJktu7zI3zlaJi2fYff2Kh3GWDcGyOUKfm1vZ2NlInlm2r8EiwO4rtshJuzDIz2TdxeJn8YFjvMWdjOZlSaHjXH005n/7QcOUamgSqR1gQNx7kfxUA9d1pUt4rihYBGQQWAbYnv1lv/5ySvgUaWRIeU4WyfS7wjLlEdU97nxNs4ov+wfz/0/1ZNOTOsSSiIrSzv8YpMZIUNQBR9vNzQr7SkOKhgdDRKxKAVGXoHZI8FKywbBQ3v8w+qW2cHhiIrZmD/duf2I4vT7mQ0/ktFrGdXZL2fb+U5fTlwNaJBcmDi/AR6p6K++47nCOuYR4E9XLiSS1MY66JmDEmT674xn6K0JsPIilq794js9l8XvDEEuEazeIdFQdxeQ1s+nD8P11VVLvleLs9AhKcKXnjePVkoc8WlLEnNKIDoKrs8tpHWPkQc9MSeYUexU86YFDhtZj09RR0PL7/pCVpBazll2/3xFZX6wc1J4ohlM8W3lNt6+Sb4MaiN+/4qiXDds43YgGIdQLACbFr4obByYxSib5mn0QwrfwN0xI+PMrLzysKWvXgOA/NQe0yD1xifZXVlokodv9IGz0oAKMi1WIIZHa9gGPQClmYxH6h8Uycjhp2SqAI8edlDHtpy81YXpEvWYDyrR/u2Vr/9aRgdphkx4LhBQKppQW72TvdXU7GMQ8D2/WJHEPSng0MbZNfUEMNkhCNsgIM6FVYIrSPaf/hALTQ1VhZNKXbVbMoJZkDJdoacQ3ruv3grZRKWXbergcgIFqCj8EAfFVgFmqZj0x6ehivaaSixzMFNE0vrV+jhdZiPG7TqXMz6RdeogGuH02rokvxmoFX/JN18arWlM+LcyxqpuArwQMGTUnrEl0k6U4ucFx4v2/mdtpJJW91LheO1BS7egUI+VE8LygNo3iEDLuYgw6Cv3Xk/Zsl5dHREBYe5+4xSbKnw9N68Hd2ZJl6tw3J3Fu+TcCkRwiW9uPF4zyXlj2EpTpycGrNb1TYi2hQa56EUlUED5KRi/qKRIIIh7W1bzbevmph/plST/b63ZDVdtkQAxsWVJxHcPYVF28x3wWdYoivF4B/9qlNw1smhjqa3a1seG1sOF3vla4R58Xj2/KpRmYMuyg1AmV6vZkbvw+UPbYqI0PHs+NCdASPOUHLjGCgj1BZH+LqFu40W/bUgWTV3/ssmvMvGtN/sHspyaR9be4WogWeIjDA3LesiUg/oN68mhJeK59aD1o8OwHXVN1i7PvCDbKNu7OHEPu2Fy3KCg5etBg2tpym6EgRFOIqCWC6jFpJMyKQ0CMW5IWzZDNmGjWtt6NLHdt5s3xnQ0J5TCX0Bg9tWMNXK3XD4qu43CWdyxLq9arUeVZzDx6hJsYg+WM08/9f9h91LFZ704bQ970QAqDlTilby7fUb0HM+lC7F9ZP4NoIMj3uQ81EDGVUF6DK1PgIO1onOu6Z58ZymQC6yZOFcIzNAUr2BNrdHKul4GKpM8C23NK++BGWpbN13dvnW9pVV6HsncjejpcKL35koNtgVYTe/HiGFznnZ3pRRXf7iJttnt6J6NSuD97cB1rhbUX4vkJg6S+Zo65Y0kZPJiMAIDp7cgMOcFJPqOKBbFA0eKH0+h19YQ31cT59uMDqNk3WbQk9GhJimeZXAwCRUcGVKI2WvwVFL4QwwviUMKK41YeS7urpmpSNx5xNQH27gsXGbsN4w+jCvfpp1Jt1FgOwAJpa0KxELZw1+GjpRi8LF5Fr6WsXdslqbJa+jZMmJFuqBxxz7/lR+UBmRmYzlx/xfDgSNJQgrpOLQ3KLCpWnpNqRi59iEkh5vKZ77Kfas4UETmn6145T0C9GKNqGPcMXTM3LexB32y0x5z7P4MNXmCNtmrQGF98FHIReJVrmoKhW/ADVyPyi1LSXhnmM6uUW/fU1q1NB9cPjvyvzwtiW7wqg2Wd3Z7hOA4CDDVgKwD4Gx/F3eDhDycg77K79nCcGMtZEH/1ouvXw1LNwq+BlqvIA4j2UENQTuNs9uiGn1t5e+CpGP2dTsxHIkHbF+vBDhHu1LveKeZwnk6+xX9+cmHhfzY8TkiwMtb7j7VeeudSSLjXGemRMMF9b9xVWMhLAFjnuUjLby2Iiiqm2Z/BLRXRnWxg6+sazoYynGsEONMss2s19bSXvu7d+CMCpykCIEs9Adwz2zK5lmXciBci9LcTvfMNb8kXwsgXeNZ8dq58EPLe/70NB2r953GEZ34pZyfFei4IkUyAaUtpzwIp9Fqs8W8vJOI9s7WhUbY11WYUfp1//B8RoOGVIt3YNV/6wchaa0tR2bXs/W8KEL6+ZFVh1v6bm6ts59M6mdbXAihjXyo1/iO8SE71UYfRvbSPiLuMvQoR3G+8XJTDA7LW8DAzUG109xuMtXB0L8n6cE5o9dxrC+pc8TOB/jsvl2Xf+/pJpwugQl6eFb8I9X6606lViIQ9JuQtJThAoB8Fecar8bHxoNdvb9rNaebKqVIjP+XlgWZGQeueUwu9/xc4ZPAB49sCwn8PhivN+pRkNX+zyROM8upbc+Ukxl2TtQEBql379980ymeJ4MpBshhxdYiFpINk6gLX7dLC0VSqtjnbBfYaPCu4pGTYQTTkojGIyz65+7yOs+fs0f+WAjgiV523V/i/OXQdyDWPAOth7h9lyrJ3U0i1VD2A+xAksxCIdr9e9skvLSiFQXH43Xm2SapygEWtuCWSobhibvXM9NauShK2dgzrItcbBoQIzgSDgUpfHJvQ2lrqyXtBJGdFSGxsKaQMeC92fdPCKPngpPZMrfUAF+SnEDYmImgE8bOSb1WWS5DtdAOv50nOSkqSJc0SMHQEsIrQSxy5kCscePpJ778QlksX7jZK395NoeSeXrRpA23zHx2F8wqCtNrdUKn2g5zcX/9ekTRkNDAtvWY9L70Cx6H3d6YuC4/KWfEgLqfNI6ukIYOAtDFOM4fj3HWtVVb8JyPaZBMKU0akepBkgunrkcVldviK2M1GKqrAU4YF26tvjlasPYz7ULOK1m0WAcRJWWx9rONooRhNw1YkZhcS0sR2euRlxqfGlCjD+DDYMrYOSQRyTlrmlG7Sps5wQ+ahKXFtFcLtt7amIfDEMS6wwfHLHlzBCS8860Dx16EleQmAo8GY8gPnpuLC3JXy24q3Lqz3mRsD7kGlDetPgUmXpP7u7TIyfLX4vE3qhvewulPm/HX/+9VnHLqSCuJlna1rNEagKgIxGtE7PZl7I1LHD5ku7yjsDN1qokeUiv2se2Tq2zL9Ay4k2kfyI5+ZgDb0eLkD19nYa9uIUg5rdIsQ7sXoXLKZIjSDIn5OBaChnxQoWKqTNETA/Eg1unETCsNUiOqgLfzzo4HmbXr3S2Wyp7yEw/F2T0Qn1ixJMZVJuQUn1B9zumhPuR0hX7Fh5dtAmsXscWJUKaED/hAppbLtTQfFFyKl1oygZ6nWohNi12YKAkqNcXcDwnYw5goSEQwdaaDyy5wO40zhxDuALodDfoNC0tPylIceD4/jMZsh+Nf01UjcApPR7L/truHvFiZidwIlG8Lc8nQsHW3DSDpcgrHj0pkbsMdEJJPtMvcvvOpXcL336cSfY3eCky5Q7wn9q1TFtAF4JSNFFfgG3UkHB1TYQMHjoOC783RQCJ6kEUN04Zd8NcRqKjrMUI7K6xpoB5xHLkCe3LsiWfDMx0Q5rKAvOhISDahWG5ZljvD4b3PtKo69h3ppEDVKAwLUzonoB9uPLnsApHJz+WhIAGK2Uc3ZoFJ+r/vQ37XhgfE7CbugWJRmUF2ueTcrAd0I3pNcrQOqt3mWA29lTQUCeNSMQM0o8yhruitEdqZnCw2b3fqR9z1UMYzIf47aZKvDaWBNFoGkxlQhJrYru2U3ACtzUMIpOBQArfLhITBk8WlQg4wZ5x7i68f3bhoamu+rOP/Y6ziikO72ejmeJfC9IlwlpwZ5Oep+d+fsDq4mlf+CJC+ncweEEvLnZjrf1slDtZan5A9FWDwDoIM2W1sGwOg1T11kvo3lUH3X9W1mwE90+7JCuBeUwmUfGC17XXeO3ZK8xRkSiatGRQYE5xi8MYeNkHhhMK6n9K1hDWJIxkiaF6UNwNFcbiksOeCHtBGnte+aV8B2LFDPgGU5+BZX3G4+0/os10fYQrp+BaAq518JPru0NOpLx0zXYkGEFVtgcm+8d+K+G3Yn53+JG12k8W4B5JVV+YxzfNfK5aYbkxuWyzkTnvk6uWZJNL2+yA7zcfhS8J9wvM/JrWZqROffxr7wqtO0DLlGUWjahV6sKCNUsDEmGSnPPUUadlXs4kYBtkvoH7S6vACi36+4gPTsAjcsSOdFIJURYuNODv2Um3ddhloXlv5YL+Dmw/xZbjUPySgfXZ1gKlavA1e01Ix+Qa473N1J2muOJbx/8YtZZbrkcD/vBUFWBoFkQWnuyiR3AcOsr+hd2/BU+VrBsb2asaknLQWYQwNzG/ZsEIT4JIVIuZEFFa43xVJp/m0kX88DuC9vtUwtaUxt/rZZZGCrzHZxp/cvp72qfRxU/l+strfjQy7a2iBn8uvIJ8qsZRSXCwnWJyT0NhTMD/A2SgDyudKr8JZgrs2L9I+2S7u1ZxO66qqXKqiTqSPlZ7cEir1Yp0oloXAYw5lVRpYaUNBk8VJvAlgN50xfIEc26nlFdwaxryVHuHilsvCxyXef+884A5MUlQuYRj5Ty+6hlF+m3jizWr3GIAILL2zYwLsfBOedJDkxMlbjw+WUwvAijnHRBe5IEt0jn/9TRg8hkysuaolvslH07KgLAvUhqiPDzqZp0Cs8EcjHeshLUEtSI5/VmJzsYO79a3sq+CHxxB7X3G2w35MzoctcEjizVPt9/sNIaRsQH9WU6uTh02b4aX5+zHPHEFfM63R5r1al/6pnCJTZXrysVA0HycVKYT95/hFBgDH7/8e/T0pEf85TTS3Ir1yi0aIeERHucS2ij3GxZRY0jCl6FrZeiU775+iEagm4Fz7Cj/hmmsFFd+yxGR8KRSKNkLJASb+9ucGFrofyzCAq+dDpdvEk9UtB3iR/ZL8w6ZddcruY1o8Ht2IQcCzgPgrq2xs/Z3SPCL7+AUdoPtI2qyJ9rBUwl808UVC3qO6CLHImCGcsUZWAYADlVFXp1ejGUBssETw7eeNYgj+IWlyUX/blLWwfeeRSJAkDIsPneBUAem1IunYRlyqKwXOWIDhbBjt/j/yDEecuWlmZn76+UQjZOjjClExzzoKDqn9NwxfAPAHIAWxQDlylziV5+KgSDufDwl275btU34w5NFN2bknBJY6HDern9Hzddxj/IJprtEcUyB3Ly5UAb+yTZHa+4+OsV582AHefAgwEhD93dZqcmjHKWNo2st5nhNU9UaWCOr5vFflA4L8jtpYSW+S41BmfXZcD2Dch0VFPyhY+1leaZo7czUDmhFGI6gNHBgSEXOiHj/DLIXaUwrokGYgUeMM4qwQTLq3DRAb3FxUOM1hTXMY1VQuOnU1IqHZeJ93kcICOHQCxn5pvL46vfXEAFmARmaxsbGmihQUztNdY17P3Q+njqNcVgsb9eYhpJiYwEv1a22ok/S9tXOTfGrmwW4KZAizIjuf6FLOmBSfAPE7fFjspWbdyaJOvWq9+MR8viWApapzNvNrHVw7GnSjP/AHqP/j985QCoDuD5uE/WwA8ioolhd1UclmviLNH9ZrroOgBYPI/trGeX+9jRqTZ23CeYa4pcNo/edDD7szeq0jLMJJgckKvKCmkLKfE9FSZP7HRSzTTsrJz6R5BSTddPCKyDObLGc4h6qJantuEZvJQjc7UoFiIpMS0yZVuDez8k709flw6o/NMJHgmWW9bk8WLhCNr5K6g5FAAeSVn36L0L+Rt94mhFFrDHqFXQjHH8I9nu4v/uN1o+NAeRCLkXR1+N34O5QAi01967FydSFBnR4Vssu8sDZjeCdXKUVyTDJnmaxw3f8NhnF4uojIy90Xzq9qJhQl5c+Bvbo7BX0Bxz8TsqddLcKsm1Bp1hSEtajGzHETBr6iqxRW3ngxI3FyCOgOVKqlolUxpV05CYfbIQGI3KokvhjgA4gwRbbelI3RJiKYptNResSYZ+Zjq5bZoCTpu6I3huljXSZLAig/RFQBSOyTW0QMHkkRaBBMv2usbLx8FS5xLmaCphQz5onJBj/plJaAekpTBTC84bRjF9lXkszTZmHfQmQMfF/OwOq1OIxe81Gc7EldXmX/ko67si+m9KYFGC+zhC9Ta+jtspJ0kEl8ifnPoCVUsYASYaDCdlldnnY00lJInt5Rrfmc6LJ0O0yqsds6rxo3CXPurXPFZwOtcKb3i1UXGgxI5Um+yR5uExiWy+sfQEZwrukYjL3GIMR4JtUfb1EAbq4cbqvfqXiwmmauT4A21bTqXbAEkDRKPsd9ll8+uFg2Da8WgWJhe7DhYyM4HbYZml94muHQMZg8LfFjI0hSEuT4TcLMsvf2vtCMx6Cm/LPZAUvC1dIdUBFCx1XRlQ/sPjmzXu65KA8clSlRGPRLskUCvoe5inYDMxih/+3WRbcKz9LBlLxum13FnNfhkWHKw81629LGZMs4TQUInGXV9c+b9nLMAtt1OME90AvS2T4ipuhQBdF0vkQeyi+EGuLvVMjT7xJnHj3rR+V2HYfhXiZhjsX5rNdYQfeIJa5P7MCa41SUeDksXiLPWPu72l6Bn9fWuezuyZRbLiTqsJ4ZGwBquMwmVZ5dEyiLsT3NSva0zR1sokYSDkK0u/JEfGAUJalkiBfKmvMDRI00eTjaEV3OK7UeTXnpToQGN69nkDj8nwBhBSvT6g+/GX6w6ZO6Bqq1+vpyl4xmKuC3+LcJTiJjogBPGSaC5+ELEcdtyFhglJU+74EfbWLb8AHedo9ukbOSd/L2ZVYQt6K9Yk+uEjH1iCDCF4m/UmTj5wVsZrbJBhUNN0mlUJSo6bUA+jpVGJ5/3O9EGwTPh16HZW9EsigYbyEY1ihNJXjmtekrQ7UUtNk8nE24w4mjFA71JejYC7xsfijlwazh79mF47KYjSkgextSYAtO9BgnRUyJkZrgrMtoC6vOXy9q1WE2vsFAR1Ou50AKNzQNb62r139Mk9+F+AkrQ3S31zTIXXCeCuaKBh3Y0Yr8KlZ7s9fPg6ZFTlEAfiweZxg/WzfDayDMemwPu4XZ5lWMwhEQnNsFAcJG/h/nn9Nbzjx9HLztHCfkckR4H4AVvzevgLTqGh0HFLleK4sFikz4boCsVCg6zeygpx7aMtaOjrW3OuIhlRN9Y1JWWfj7/QUL5/gvrwwOqXqRQNkT35VfT8Wn81brFbdgipaCPTu2iGVpsGN3TLu2MnDJLW36ADTMoF76mTqC1ZNJoVW4kIznsgPgaTbK5z58PRr+IPIXoLoE1w1poeXfK/frRgpihf8Ja6GJS1k28Mnx6ZXc96mLP6WGL3/iWc9bFzc4G9kwg/QXSFqbDLUZdNK48drIQfUYHATb6GyDRNqsa44Golkep5HK271K2HeihCk2iK6+6M0ArHUBBCsAz77y+A3VL0BWmj+C98IWXMphrthjX6RdvUcTCL5uy4k54OijUxxpKtAaeHmbzvVFzLLvhPXoY3SHUcEpy2bsd3RuwG9Fm2M2bOBRsd1WV/cxosrhFPXN5C4WmyO6oRgtbYPajhigJrjO/4p3mLKwZJKBe0d1413B+RmcDOpikl451sJFuzgSew9OXB4iXm0ClNrC2+OLs/+qJHOUymytMcOm1eUJurZ6DLbrXTAfWVTLFzA8PdUv56F13S053FZHPvh/yhrF/YBjUMu5Q5jNDpByqSDbJvokucG0YjCaW3VeaaKQ5S/TGgc6UdK3snkayXvIAOBKxh2v+FChPexwpApiwwrNcGPnmpHngGsG7TUu2/2mO04CqrlKN16W2T+sucGJHrR6zfS0tZkcltZy8nq1gno7YdSTkP0Tu7dwM1tL2SoxgkYjaK67nIZt8g/vcHOqgCFWmUJXWirB4xALp+iZLkpxcUMY3sFGynOQeam5oHYNqr8iUVQxS7Ahk6J1CmdyHjy7xz9n2WnZEu+e0xV0AKWThzSeBcGVSNGcVMK3fUFGebMiHx6nV8uTkrkU/DwXya3OURnEKxZLQeUWGGpiuQ/Z4+vnkX0N9Sos3EnMcwEfXOtRM5gIU1pcRwcAVm3nO5Pw955gPryIii85EQcizJvHvcFJX8MPf3i4+BJQiY7Q7nUao7eat7XbSY541TzLjFX2xKu6kOMeWiDEcAJqEEJ3jszouswacD3R9V9YwSJveeA68iYFEV1UKfBjdVaFeun1F+vv8cxwmXazDWOxX974AdOHOoGOlR3N/znF5GfTlzm+p/J5/QULQSPRyhgCV8VGJstPQGn+nssuBRFueNLdc/aLlTiHxgsNO5evDmjPSI7yXbmDRne6R+UB7P3pfdTza8LGHQZh8Z5g/cYOUtoVfPMxxu5B4vAT9cQlJS0SSftCIUXgBc1YOrnO5KAHZ0TMCASh5ZvDJNx2kFOuHHlUKaI+HrHUPaWxgZGLp5NDjIflt9xBcyCvy2dzC7MkhmhGMdQN8SeBZMcxGa3AY8qW6Z+qLiRj9N9QyJ4yrko3XE/Dw1sxAxVGTsTA9MEP2sCWpT8PaZP7NxFI3mDh9a+T5+dse7N0Degs3NqltwnxH1wfPcH/MQYAxMpIZknJ5tR/BgPF9He1vdiw1b76Q4mM+tnYkvJuaxO1KmYShKgZhKJ8nzks7hcSud+Mgfl1iENRHWeBnNWURZeNR0KYQ2wSa4s9y12zkM5VYN/ZA7TOhA1KgQhc01pzxVYGTbvnSRXUkdOPs0pnuPwmqxdy83pM1hPBO9pTnLcWi6qh1bM4+tENesXJj8VFxI5H5xgphhhLBe7ZT7MZp2Ob38E4+uVSbkDbyg4cJNZFYCfGUAnDN82qODECR46l6G96jifk73hXKVyqU7kuf4Wb5/hgD12QwkkfKSfkGyxz6uHlBqP7YSZnXjeOyVrrs1YiJCehJxyJ5iILtTIEGpQ8Qky2N63+VUhrdYqTRJvspwonw7adxasELhX0CqnMEmaZfocyDDi6aezqKuIYZmG/OVseOkwkDK1/2YLDF5neYMiQ4wHAbQLgZ1TxXmu1qb4O+0E1xPJ4NCYiw/wboUvLCdftQGQszVte+NS4Ub6W9V5rMdAfFvJG+Ecvq9DPgZC40UGNw5wW9gJn2exuTbZJyIQaSGgNa8+8+1q6rRaMG7j3ivV1cJaGCsxDU9NlTAbeIJUvDnq8RM5LbU/udfPIMjgoy0oDRk3hrIxXsy7yU3N/bR4pfUvp5tg7DE3SUQpFk6mtc93Bz6aWX8Rk+M1T63dYrYNisseGCjPCP8kztq7dsOF0z8Uqh1UwCpDXu03BFnRElS+n8HQMfPy3w2r41jXwaVx5DazNJZ9Ev0yEkV7KxbIfUJtG37D+9NTCfr7BozTTHbZ4gDvB3LmvhqqSqCRO5jiG6iGxqRrs56Mj7C10CZHfEnITOWuIFbzeuSp9QWSjzV/ygdKXzVsYkr9wLyO6VjHGSb0zC/3VnkE1iK5FlrdffyIqLHzUiObZF9t9dLCjWCRDXELUh8ihIwcohmQuRV1CjUBw18cwVu1d76ttK1JF+4GmvIoCuYdoMpVuiBmZJG57xr4rL9FJqS+htZBFwDOaMacYwO8iLJj0jJIybXQBWkoFS2eIZjlJA09vetYao2ReB/ppN81MedJfJiX6BO1Qgzg/l/js7Fx/ZwFzwxD9bNZNv7kUnDjXHYpA86Q/i/IidH125f2jDIpAg5C7yRXVUsdzKpciuEOMm4wc5C+3mvH3QIx1kE3w8YqSgpm58w42Byru7kvwU66t4Lsi+AnIX0M0Gi28zB43I2pXrSFcDcZWRRJFK0BXBiKL8uDrPINwyyohpiJA/tGUB3n2MMepEJ5cLco+McPqnVzH/B3+7NCOAYMunetsR9OPX/o6pwJf7oVk+uKJh1o35B7Fd1ohaqO2IXPeHsPta5NBT1WCwbrlrA+H60vStAwJP421i6bnI8Njd+AXeEeWypEzhK4HperQEn7tFP6eFCdtTeq3pYd1mQe+oTNf1tT89nUOAaU228o0EZmEKvfCl7IsKe3qf/vqd15X5niz3v+fHlMokgADqGzBXbNu4ULiGA3XTb6EaPDkbXFjULTxtN5wgAxUWGdC0ninkwMSAoY3qGET+5f5zS++wn55TqX+x3W1cCE740KkoubKa1MQsIHKMDdPMjvXqznjZVfugbD1Vd4jhWE08pBLGCnnzvyquKhWCNYnHWk5/1q91A8d3WwLTIItBhCwCu4IHh8w4a/ZmwxYrjS33KeOqYLKIAdo6z2x6cA8X8OYtcYyX3VG8c8PoYrx0kvMIFj/BWAWkWfb//A/3AcOIII4UhUpraWanh1dyTkhvC5hff3z055B0XzagFSO1eHOZFEDcCcA4aXIOw4+3EWoQH6Q1Gge5EhXp1kQq37GuRNvVqcUwSKjCHCAm2ILQQ+Pm69pj8JawahRKYxerx40RU5eDcXJmgn1nZzyoX1Taz7tYC2EN4uD9cBXSkXhIYMWND4k+YuUJw45/MbX5/BPcCc1Iz77igeYplXaoh7yyIXvKBqTcteyTtqHWwr3kWUbXGDwIJkyY3r3vaRnZs7DobTDw7vZ71tH+TVVLJUV5IVSm0XRw46Sq3ekAnR8Fi05T6NsLHKMU9mOBasFuKxBtjQn9aVEMtR59UWQC3I1swPNDNXVXP2kGEJCRRoXAzdMc08msfVkGR2KHHyoVpGI76w/VgNZZmRuqn/6UMnZ+aInTk+OmK4gzisLsFfrLUFNakdc47BkPKSGiZY36v2vOBiVRppBOMVr4s3Xk9vnP2rPxlmj0j4iJxF3aVSmUp8ccbv6fnxnXj/aZ1Hwce51DcexJmFh9nJ1gt6e5cMmvP3XKHMtZIgAeA4z1UqO1s/Bc/iSLBKYsI4lTVjKA+S2qAMiGpYSP/OO0H/cC8hCGoWA1wCRsGHog26/+6as9fr8zfwbAPsSaut6gSDHPESmlmg7e5BuwJzA3jqoqEfwL32arUhLA0/C3xwGQGw13L7ib5TBvVjQDaAj4vzHqQ6PCktR0YIJ8AwNdZn9Vva0tS3k4KGfnSLlrQy514hpWnzpI0NVDXmlGyJkp3Z1ig6BtGOUcRmjb+GJHiUCAuB8MsCgUyfwca8KjpfPMhDKEnMdMFW+itlR5Ucc55skNA74DN6otpa4Tqb1WiZr66q3cWuf3gzvK6c9jYPZbnTbuSVzEHHXluZmNnu3NWFkNpsQC7xyyKU1/o9QLjy9IibLnovfW56XoncDQQkd7uR338waf4BAi27a+qQIsUmq+597UMRYF2+KilRvzSpdRiYH7ZXTrZijAyTetGv0DsGDtI9BBWy5fM/qaDwOccn2Wj8aGjjeWcNEnX5eVkJiWuZM8qJkILxMJoFIrTKM0dO7xn2XoFRFdqULF1W36lnT0bCEtr1lfAE9qCmco+IkeLb8aIP5iLadNnR1ogG1LkDrifFPjxQgmrgayMOcELxF84qbk1wxVFszY//xTYJdicqLKo+vI1KeyaDFfLtuUssjG1DzGRCkVC49YEYUx2LsKQp43AbkuAFo6XLidMicDepd9LdGBzaENJ2ddwjumGd+dS6Ga3tc3k3dllGeeqI8GSYwx/Awjldo6tItmgkXnhmfTTYdz5L9pr+ZZUKsGzUr0VTAjxuv46uyz8xIQcHYV3q1PyfiiXsXGfNggVE/hwKyh81u08yrZfjsjGexGJVONIbDLfWK5HBDa2cmgfmI9o9oBQPgnENHkSFlb6Iox6Sa0MZ6x1XqSJVof2RrCt73hSFBzZ7ztQnBmEiu6+3uuyFYUwX4pxVekaldcKr5CB+MXSa+VOKNn6XT07BKwIUzWvUUJGcVL+Dx4bGEAglTFvOe75gnFLKLkuE0Ct+/m8eMWmrho+7RZYGrbJvQaq8vICMDT3rK0/J6F0HK0J97fI2xJAIa9dVzPp6bPO2D+ydh5uIrxuffZJyWU506Gcl568XFopdrji2D+7qY2VdxjhaxYknnsEcCPHfB4ZI40KplxHhX7WjOq22i/AtB79OIgP78N421WN3KJdnqGkTnsq6Eyig88LT48ziFX1eGnH5/dnHgkvOjdzhwf2CKbx0maaCRFruDpoVLHvF1DpWtlvqhgncv/BTSQ+lsYEFf8pfCR+ipG7dUuM5GkeJcYovK4C2GEC7NY+x6YZQyOL4124hFALXHTTiYvOddd5adeRPS5oTnaszS4BuF9HQ6vKjyhHsRC0CkHYGEmoN5AdXeGBpVrUJnu+0iYmre0pqj1QdSxCICHcyTN5UnVTF1Fd+68YQthZ77WVzC1fMVT+d14SxqWKg9EbWhnh5xHm/t2frKboCg0mRgg63KDllFJSeEdRJwS1ovb7fI0JzcNBvZJoo/rGN+G79KQkw8luC3GLWKQt0cBQ4oN8F7XNZIx8bwfT83d8G1X08Ns9KWA7YbyellS74rPbioynM1bgpyjH3XmmJmnXNCuxG9OriwmdhDlnudGJDaRL3xqOEB5mwFZota6UZiHskwblli8xOKUkxY0lAXUjG+AsLYMvElbAeHIUpaoKXJn2pPI/NgRU+ALrfLOZNW///snh7Z6m7zY5Tp5+nqJlrc5ak+Awmz0tFnkLVY2kJSOT12jZoeJ/0dNF/k+7ym1ecf6ffBmfS+97S7CUT/QHXju7uBG6IIS+KPa4LcSqmIAH+EFTOYyOF3meKDgMZhMCibBg03Gp4ru8rsmU7hy3h6UnHkq8gCCM7taELe1I7N2WBzcn1+h3GurV80JJQ/EEZVcvXastXh9UouaQihIMokTrwNy/fju/GNvvEhaVxg+MfswiSyEniCH3MaV5js0o9tqDIIGVcio5FslQak8iEwwQhenYZ0N1oKGEjuf0ofJdh3o9FpMJL5/JmjJa2hsaSZZijRZ5u8DVw3VoL+rn53CcJevMG4FkLm/6ZJt70giiLGQKR1N+xiZ2l1D7fiYN5T5qddJdDem38YnErRtwCeFgv7P7OPy/Z9uMvhrqjhuC/LfEhywX0/tqNMd8FCIJTVPW95QlarOYR3/2Yuxeng/H3FyjO9iDf3nVN9q1xYEV1Lvj+ig/dmG+hxrSLqKjM4pztzITfkupdugltWHXDh7o1DiiEmgH5vDFpgG71ubSidEkFj894X98Q46i1nhjJEVK77ejGz+WeMWJj6xLaqtgvgJOrOoyz9SP2EC1nW3R+HrKapkYjcVXt8AKTuzcoFz3eI3zPpdYRWgPqBvMEfVFQsr7ANEHwQcqXlaZmeMpZ8YbpRLI0VfWytK1gjJElnM1hjhK5MjxEp4j9rshVCUM56jmb43IjKcfsZK4s1q52VY7pp14N/TK965tPVAdJsNyVyja2osBaCuWk8kx+A7WTuVAyrPKLfkqz2UXOZ1lxjNuCXUHuYNqxk5iVPququrLCy/pHzhmaNPff7kcKDibRNcluHG+7C7iJ6Qupt5ie8r25DdP7I7sg1LG96fKaBPfZiHLpox0Nx+v2rbejev5fsub1lhxZGSr5uiLIHam96EQJZ+dAF0sEcXzLQGfPBV9S+gxocGgyEKS5z0rZ7Yfjd9gLWRT0NXjpfctwfvLuq6z5F7LpfS4uXq2B+dP0rqAewhJgeKhD2Xpk8YkChjmxeUTto+xamR7aYXL2VAMGUWSsSupLvIgofeLyOIJ5AAmR94AIW21NwxA+tbbQ/XcIb/SOE0ttZhIsSjtvXwqQRBkYZqJVgM16ITwZD7MHgCzw0nnUCfDU5IytZ8LN2ilh0yeE8J/tmGRPorFXiAzOyEWqCkck8K1ka2KwTr39QSQY0m+Kfuv5Da5Z1i96U3p0MgbjIoZLXsrmCZxmZqYQLBm9lJxCmvRhVOSNz1bOTfxmGzS3bkyOrpn4J3DgT8JjVC6NkltqKcwK82pvz8N45b1+xIAY54JBU6lv2uvZytXjsvIPc0iuTbFSS3utNUZLLv1FgqerfhjfJWlWedfaKx/JK6yRZ8SwUidyLt2XVr0r/fg3kJHoHDYbJVZ2kuINKEOCtoFs0qAlPZSHHr/RixZ3kglvRkhAAlR7z8rzemSnzHdZv8nhfVKo3D9X3Y5NqyA/AoTzm5CAdczKaRM5LLe/Zf91wybdcXjr6Y9XpLIdPSk07vFSVCT8gAs8vs2UgQIhecJml0YKv9jDp+FtMRx3b+f/B61DeSAPU2xGUFCXsgB/SlmlJX7vM8Aoa3Th/8o65CfLLK3EYtDxfvGl3vR664ifcXVRsqfjLyBA/Ge+c/CTl0aouShCJk3gxMtEMriJBw/R48EqD6Els5PAPY0PJb3SAeptm2R4VpNzBkRt3wi2U9NMqX0o1rhECdVGhkEzyXcroCPNtssOEpoSx3I/9bU19pdQzFPFYKA53i02dN7/gF8OkPVWANjcxGtJVilWoEikRn0eyIsgQyP9C7gng2+XM4pjiQF+D3mFffujzSH/HIsVuyj9DE1Dt0mXGTKDTlXPXqmw4GD74Vvu4+AkQADQih4Y8dHvcflw12kNnAx1VEtzOS0bq4xclPkVPfWIMES5H7HZqP1f3bRZXXJA61m4p0hPiskqwltmisbjnZ/PNewS46U1OWl7R9w0k5KgJRVe+dpHW52EtLLRlT6UXEfWOuG//e2eyjedNkug93i5SpqIACnC8vj8jd+ulK/JcPMRK9HmbwKWXhDoVTBEfqTDDbXIWcaJ3eX5R0/loh1Bb9bM8LApNEDObMV0AYSNAZdnSL7WQA0N7pG59L7ddYIIBz2kQTITJDU+tphTjpRs7azu4wf6witYvg1zeVvvF91W/aGeui3Od7XXlaLT7xlIoql5zzMFPZfxKWCN6gsPBvuMyesR66fpxKg+/P/JoYSHR9LUveSBhss1IMBx0RCjtRB2ZF++bM80izmqgkxK4rsZshDbnE3U36dUE/y8Sb3wmroGKdaNUbmxu3ktITvWPKu43XTulckHnOk9Ce7itVvop9a8+hvCjnXcCW8say8BZNq4c9av6UH+6xPP9zSTiwjMzfI3CwF9Q7Qf1OCZgqHyYrPH9gkFiYQR8t+JhlhBxHIhaM1d5ptnhIBAHdJqNR+0nYkgLYBzzwlbLZ2D3tcM726vHp/eEBFymDU2U1eaH0eKB+PeN9YxlNBUzP5DvXdLfNJKIX1WOrZqh2/4ADqjSmF23CV1HvEQojq8ykFdLhlFjkQ+rbU8WJ1Ex7efeYfBnrh5Zz3LmfzJS3rlN1rfbz09O/ccdrb2sOEOKC84CXxDq/0L7U8uEs8PhIfoS1N1FBHYTy1h3QY92LMcOT4bpIg99ItetXc7fbNjQWn9W9QdgPvUPXnTTvreJhA4FqLvj9CW/axL78nr4sByE/olImY/fJQd4lJww+Y2gPgZtjLqyzGgPuDKsKEJ5GUoWd54NLSHzQ4gaLUEJabgIABhCUkk83vlrBvADI/Z0oK9clcFsdkRqFOV+MxCSp1/NKYajJRTMDVULkiy2qWPKhKMbKW5smTVWTut2n62F2Orjk4972so/9SBUDfIv92UqrUNNVzBEGIU7Zg+BsbJhuqW17TpTRh1b/GWOrM+7ubHeAfY4Fd5Fi+6gZT7l5/kQpKVrm7ZmbAQcA9USr6JGqbDcSBHq9oKP7ESfmlbp8qnFczA6O3HXaq7BQLBGfjCOpKw3KuZdfhCtO7cotJ+vOEOEp2o4n7fzHfdchp4l0bu9IB62KEgI3MJjQgs1AGSYxG/+jDrLi9dzqH0OTmhYg2jz7km1WZWZLxfs8EBBFabDaBaVEJjfEpbupZw5bRAeQ9oIYq/JHUuFVAtuddo3rcVqrnDBPodEYSbUkPC0eeqHr5xA7uUftPhrKwrEPI75ec5mru/miCYX2m/aI+fAXmn1Lnhn/eB0suXl6fudApYdzvK6hYRRSp3Y1Nje6L7VeT4iw2gMFteprJ4Lb3RvS4NO9VwA5gtBHisVNx2hE9ikiOcgzNy8Ca3CyuMBr7fUpdYvc+VHoWXXAnYi9D+mZjg/rW8ywJujGFhH6Nn0ffwmaea2KWbNPKr9DMIMhVRO77y+U7bvZ0TJwK/B4q66CXcV3NGZ7usac/uOp0Cmmwn0TejyZUHFJXq+6CIoySn4aMUDd3S++cbObbpGZo5eD8Nf2Vj1QmqW6PKZwULfwr+BhSKcCvb5TrXtJMQu8x3wbdg2Ur8fCUXjEdzBVvr+uZeyDaXURB6+EQl+kE9rp/fTA4Sy4GX8cgyrSmyrLAl/qtjBDEfPDFymiXKN/irAuh2zqYyRwe//3/fM8NAli4otWTuHGMEzFU6qtAS9GkvJ/V4KG7qiQjy4AJjZVFjyhiweRewlyikmaOtEA5bZ+yPDzTVa6ehkS/yjNKZIo3rnmRundkn0zS6zQ6C+sRC3ZEkpGZzclezMnjjxqbM1ap6K3qwaJOfQGAygx3I48/da5IpEp11LFDHJCTFghMT7iykPQ9jbIIlG3VJN3fdEVL2F7WXNF4j4AkA2DVyqXWTZCxy66/hGaTnQHrlETxMRkpJQLIZkvvUE/V81NBiyfJ7g0fb2Wd+OpELRXCG0WEGulc8tftCyd9bZxRWKHo4MkyYsBTGewFfDx5d7MkLlk0EWy1P2KK7smAsHgFQ+Ig6+A2+bxjcOqx+xFZV7wTVeZ+VQzFXbuZxIAavNJjLl2gq9Q6+YuvN/sIQnTJsPExMx42fDvCTfUIONd8U1AsCH55RH+kb4VuicP5cxQafOfTsvTJfZRgGx4b6MVtte0MZKGvQQnZvthtXgAfvl9YtY0uLUFezbTb4cBHJAhjR1dfR+t4nmoZJajK1HQ01Swwz/3Y7I07Iko76WiiRWOGguem4gKxxk+bIJQf0G4Cy5Rz22TKQBKEouMouIAOcAMudOKgeVxQxxzh8EIu+rCBwuIZl27FdIxdAP6KGQWtRpMrxl0tgWKTKSJCQOQUB3txfEons3MPpMJJN2E4Geli2fk5/FGzvz7aywH76VLoAtuDCJhbv0ks+JS8bT83fXt6pTRxBBGHLTBB+GqduZMmGp5NXus6kmV8mNDHcMYuKSSFY4cg9ExoGf7WWnixy5k9FkUWjix5/V3UT1ih6U3fMlYoW+uvLM02b5pRTCfkRK9I1ffXn3WpUgJEdJ3bAqWtuXlW6TqS1wH73yhoYIjX/CFE5YIPzWbtedP6gvLRU/od32SOPF5O2QoiRqjiFrd+CcDTXsKdM1r2oU3xOhCF7Mg6S8I7f+Jytc17IxzsbgpxDa4oUYBq2E5QYscyTJjIAStmReRbP/tKhl6TC1VqaBs2I5L7H+lvlTuApHbsiIBkUfiUNILiay47Flq8j85A18nL9YfMtsnW9qrTAUzHarwPoG2l3rkLezVNvZ+fOSid+CXKfQAHF1MoDTVpO6RrYWq3fPZFeuIDx5b7XskGUIdE1XiU0engBTEOdARSYyUkvxcqTIl2qX2ESNS6saLC8IFAGS4lNBODbUfNjQQuUqHI5t3G6wV0CWRFHA/jfS6aQDWuyt0SRObnKFj39wE7CTlsZ2aIXYlsgi5svmA0OeS1DckchUyWuiAgub9xM1CHopgR1XFjGHrMs+sfkQ1ASGkq4FXk6CUH7y0EDvEMyHbW6Tzq/7/BPEXGwWoCjmyJPYErI8HdOkeDQ/f5h63xByd8ag7ISMXJqgIS9bI7j/ZYJgiqRunEcUoAdwyD2kp3Iqq5t51fNSEWdVTDL3hsxq0mTfLDkCIl8SiMfoIZVP8TBs0SdJmV/t8V5XcZTnQjWHBHZ94Nb364Nb3blEyBoyaonQTgU4a3sClNnUczorwTFBQEmLpizAg85PWaikoY4pT31w7gtwooA+yu/q/NtN3E4XV2EDxJAZ+/yDJyqFfgOijk8xqkEEx4PlyWkHnfbGVoDF20JtqEqTkcaxbj2s7W6Ff0Rp5bF5+0nciW0wAnN0BoADU/i3bF7EDkJ46A+Bqn12UrxD2NxhYTNkvxf4rKMYsRVync1J3Ti0/R8acB2Z8bfvb5llWiFyfO6bomPfFfaU7Ze90xtMrSDo4Ymo1ODgnesVg5vM40jWPU9qj9PY3Yx1GLwY9AZN25N/+l8HztovLFzGFTxV9X386k1OMB/3rNW9uJ/CgiKij9CGabJkraaIFAKUytsi48nmkkyKPOmVxi6RwsSVB8dZBjFQgWePsEU+E0eJJNG4qvaJD/JUzxQR9KS6Sr9w3n8b6cvF6uZO+IkrdqRV8gEvsqnQdRpWD550Zthw/UMgGfBvioUJJ5P9DE1jRcl0EyeOaj+NPLyO8CjtZI3MOJ7xBJzNkxLblq0vBz7htQCWYAQf3pSGjWcx0phBhxaMqObDjw0UXEFCRwq6BA01lvLZv+SXOr1LDI5EoHbSq5LwD9nvDH8pVHGep4v1JDLhU9nqVpmAFnqJQBXfRSrN3AgH0RHnVtPdxOh/ojIWG3CbFts855nHgOuSl2JzgQ5MROtFFQ7uA5l43xAuFn76dprERQlToYea0CYXW89ZEAUgg4DIuwgaikrcBQjjRWnlMeOe65X1RcX5D24HrE8qESdhsOKjrjTw4D7VaeCD8xDXQ0IaT6L/lHycAD/dkGSKbgpijmu1u+qZSTt8arEXbfyeGWpOjqDch1eEKXlmfuctgqu4zM225UnvWvqiEh7Ef+W8V4nhyULCgGugus2zw03gqnqHBuFAb5jWGHD5Idz5U3jkuAKi9Y+1wbw9StrOhTT7qpbgA87T7XQADqU4uyb3ZTCzm2l6t3D0//PPfuF4lRusnNIZ+mQ8whcsR/kzQwe+1mkGPIfc0DmxJGjspEkdrV4vsU212ZWKJMMvFVaX6wR3f8MU+uTdg87+8viJuL2vbSgoQQnn7wF6DoDmcF/o49tu+dlFkfpJsH14O1h/8gPKPmz6UyQhSkwiQjgCzaU26GmkHlcLS+YsJUKcwnmxm9S2WRBJ4eMYVaGRyWC4xPWqFxkjLo5NsvC9p+JhAFNQ3i5XWOoF5hGN8q8ovmsX0Obc8xjsAv5Zb1WQ16R190zA4N6XT+voo3A0f7QRBadQGNLcDyqEUvLAmJsNqdA1GaZ321YWM9r1dkQXtv3PnXQRYWY9ex+pjhg8iemjpeD1ys8wEnTV2A2t4xXRI1WXFzhhChfe1wR4qGTOJEPrpiVPwdeZemX+nJO8NhkFKRO/MdKWeNHccRFkPONhl9zmvxRcbhxW8wNhdH8e/8FGAQg5Xc+GQJJSur64uVSib9Q37ymJX8/R0JbH/87e+wFqRu/v9oIb42LJf8oOgbwf224cpw4lblCdL4PQy/ELTz7f+zB/B8xqZye7y+3G0ghWH8nqgHZc85UUFs+5Ke4WDteUHSrWRNvKqM7EOs4o6IsPMl6iVI3lnbnPvmDfkPiBqfyXkkPg1k1H9yVpVftVjaZ5yLnw1S691mgVVwVKr04S8+skTI3ciugncGdZ7vzcu6DGaei2Bgmsn9tbc5Ve4f+5UOKn1D/+HzIW2rKb55/3KgKVgdH8CfU+hxRNOosSX/zlh5TjpBAoPC7UxqFHH5APjXOEERlosUH7IBrbNxDvYIEC40hrnFxcFTb15TZCgh3c65NSb0dVfTpv15Mfdj/zVjemY1M63oUIamwInf5svzn1133TV37TNIizGCWh1wfbezmjk4MQ3JnfEn4EmPxXl03XkT1ucr2O63Eocg768W7Lt87oqlUCvsd7JVCGIT0N/Xnl8ktQF4bYNUJ852a41janAzLuHz4zT+iA6lBofTWRkTYlZlrWKvIQj/+LHBuJzod1outb8Hnd2ND8ciQsttTnxQdpe59Oqt0tYcbRDumWnmJnaVQAFs4W/PyDFaniGNRpKpNjSBqyRq1yYn1D9GZ+yzqRbAkK13CEn6keQ84Saq7d9ch3w3eSHHU3ftXX6A8+NU1SHTfi8wS6xQp6ZHft8lhaowLojXSbKpuT13B6P4+bEgJhIiaKECcPY4ZoasA+bgnC1By12j1vyei4TOPdNIAukw4Kq2NFEUg+H7597ezXfmxtkZ+muULS6w40Sm3JWlZSZ1FB6m0FUlODSG6FMyUTHk0KM3rqzDqRlsDIjDZPlgF36LIz8Ssnq9CmWbLihJHb64ClxpjYU9GsHB3kcTvm1XBz5qwxNmqWLhRI1+33WMW7Htv9LhDePuu89VUScsF3ss5VkPxmVGHex+zJDWcF62aCIvyPab5m9miCdoc6lsfN3mUN8BXW/EL6WN5H5pE5/1unmE5vaJIPwMry9qrTWYNz965BuEkIrkDjrzIIK+jJ06htQ0f/DfqC3Jdm3nlcAY7vS5GSfoOnOn+2ERAV/BxS8wXggDTgplEIhM2zfFjTi29CAIqQppRN9/f/dl13G9LI7v3GtsY1o4Ku4rxJuV+NxL/VmN+yE0+DlSTxVFvFxV4y+7w/1UJbLoGzHWtShbVFDaDXaKd8tV1+s+uXYehWX2NG4CyBA3Mt2YkcwqjVqmntro2OMt499+XJeYhJ2f6jmvXihNp26LPpE60oUhQdxtkDaSt0gFRQtHNZP7dqdXEplmoqJNMWO+KqNhesABOLR3unBEkYNVVZ9WGxxZ50sCNtLHn4yYtOzA5W+p4iyTG/Wbfqtnp5FamDXrBcsMg3zYv/C+yis2f/kA1L25/8PBRDpWeeyLsyiwlId9N1useusCSJE7+23rYlU2IWw/HzDPOtqgcafDomOMIdSwktiJEeo+S/T/68aqxqAPp1hAxSYmD6NoDK4SCSlCfCKIoin3jlu5I1du+1iMvem4wHC21/Be+ZZqO7fHOQ2ALpV4kE1apeQ5LsIk0kL/R+8mljzOFgaXym99pY3AwwI0Fsph41NNX/K1y+FLxZ1wetK7YqmZ10BVTXkSYKdfQ6r+94Lm9ySlc6qruulIcFIuEpIS/iX3E70gzNmpst8Df/yQP+Ze0TLrRBai52ZcJ1vjHo58zzDBCrF/ksmtijzblvD33xpCAWJrVTKq5QHTRBOnBiyIcM+qn+BaveDLM5NrJcgbSFge4hn2p154ROgJbX3rNffrVthUxVfSdJINspz4cFMs22sdA/Kl/4S/sXQCgI73JIO1w98jpZMyppopB8L2BwPEfRsRmTr6kSt+6FN6jQMgk2EFEpN2M/j5Yv6bM1xplGd1RQwy76PwdqQ1luikt/y6WPIunYxziX1wqbiFqqEg62ZGOXz8l7d1wPbk2/qHy84C2/wmGvhOvq7e4ap7AZDugEezwnanUXRbURB1WSh8e3TMGRkmTPu2JA4ivtEyVmQd4QP2cOx1cXwYiVbhKSNanCLx2zkNI2q3UnZYFCOmYCMmDMfYGbDZJUI2uj5dJz1sfwaWVVXRWBJvkxDkjCVtnaB7KmHkKm3rAKh7S8YL3VB6K1/9HL/VnBJULo2rBlx85zOmmJA47dBsznTFKM10KAWI/WWm0jHghHdNlc9avGTwhAkXp1vQBuFGrb25naahr77kxcbtNIxGLs7FOEhF4kXdgZO6ZEm0y9XuuxLx8ieALTLoT/d7eZyomtuthQ+FDRbKRLc09vE4VXaWxhvrBGLPQZ2etfj2OR1R9nNw0PLnrPcll1xdeicchQGVe5nbLRSs85vg9EFVU2IBrf6Kwk7zCKIXE4KHLo+gbV2hzY+25uVBNPGLnIsGF0pnHKFqKJ4YY7NIDh7Neu4UYeT/DgyO0mr4AwrPtve/hEX6YRqicEa2S7dZHM3Dx0Qkj4v6U8XooLVKCj2xaKnlq3aH1k/BVmlExrs7hXf3r7anjchGTRBX2fWDY3qZkTUOGZeXZe+E5NkQk/AHO+yPy9psYCrpm8zVDe6WEs9Ylms0fcdnexSkLnmVey5O9dxZ6kAZcLBE8X/+pgvCXQdyxw9RYUIXkc5t/rGCkwavqTWoYHw5xYAy7OBm2yePxOfcgSOYEFMsFmQJxEDrfpR8lIFLeE6ttPJP09xiE0fSNDGrPJ+niu9afTzpgOVWwqgnuRt2gSPgImeJeHViL2zfulH4Sqs9LYcJN+s9djecazpxFWSm9dIVB7d/PAxRMyBtFgdaROjFe8w54u6JTqpsCQmGbCvQyiuY35FgWX1MVR/qTPMGHLLbuKYLUYJrQpujEv70HrRMWglGyG4c7fN97ODNfpQLpH3h+JCpLmpe+CAEmEnwlCLbia80UZv1ow/e1wJ1YepZ0hdGeM9uxdLoFbiuFmWlKzWYsXBFrqfe/QL9rzad5NtGpe/ITZpL7q7erVczhDJ7cA7Bj7mP8vuPkNgsitUML4CsTW37+TCYcE0TEeOMQTWXLTTSsSJg0fYGvbnaCUNCyBM/8xMf9iph8G4QONwOykeRQ5CMURq79M5oqL/+wOAtmfUp4igI7pD1xgDdsEAC45Wqyh0AXLEbLZDQpuUIqNNnR+ouK7IEWnIVm61ZgBGmsvXQjIZMEKJrtRO8di3JV3/3ubbrnts1b7tnr3ss/AqntdDvR6/Z+6NGeSvPkuv6lHWEbzhvN9f06ccKa9tddN9+yPtQe6LmpLdyJ6DugdfV8y4Q+Gbizv7y0QGi8ebEog56KzQViU2N/dHGxdrZGZ+aGnaEMw+M3jZw8c6XIx7Vjyg7mD0Ap54mS1KSfDKtIkNl+253ntfsYrxQ9FzABATURwe3h3zppl78IEzuBYiotmYjgSwhaxsiUyNDlcO4WWkcuxzgAtoZQsaDVvZU3j7RkHFErPjatwJ3oDGSEQxrmawVyUbLdjjdfUPOK6YXnsyPjeKjXKAmuG6AvM/svePMeXMRmesbpAfGA9R0pmMyKENKEI+4qHS86JXXN2vG/ONDf3dvnnfbpP256VDB9Dvt57ruDsR+nfoerb9GKIT9T8d87w9+xHT4zRFw+ItpwBiV7PnQhxIFZMGnXnqQHzZ+bTSt2paXeh2oIJUihYMxjV+feeWKnryQChTcu8TmDlm84Qc3f0E91qGzuHDG/wCmSbDEE/Qspc6jw9neQc9zleuFL1wppzgOgY37zEjQ9q2TaoSbb5HWkXFrSWfTXvdbUQ+om6ld6w33Xr5K2rmofv3pzFvkp9yCZ83vScP9B2zG3a6SdFmtxiym6xmHwRz9Z2y0CMxtDAiDhW3You2lOuIQ0GfBujS1eQAXVPYcjfNTuj0W7bUQN4pr/6lCpKTOd1cB5iy7D+EU0Xeyrzd2gi1c8wCjgfJ6vkhU+2GQV/vGiQ3SXbt6tX3QPOvy79isHkblGfsbhhGE/ZUTykc6y3Sz7YsOukI7iLzVUc7F7iSEPtRSQeE4bNNyxMplUECsDhao8CquQNu42eKhDXqpMXZJ+N60g6dpr9VO+WBId3F5IMmFI6yR7g3/viiDirdntpPhGoPQsgJc4+QyyZ5Qhst2kGEfqM8S4h/v1J+1SiPPVpHA4eWTj/EElopxvhKdSoP1byMb55PD7uBBJftY+Y9u0cD0EjB8A1hOU7uhvu3v0+p/LQKn1lXGWp07rjE/i1HV/11mu7PifBlB9RjfdwPqFkhQEjb/7zKaK3JXnWKwlS/jclCtoRr1jycm7CDPDULBYFfrOkaRBqepPI6DA1CmB7sQ9C2e1+TjISR3nMHCIDCJXb/svNwysC9+OSbOEZ5jYRMUFJkJNBJJfZsSzijucfiSsUNfKkRXGx41Zhdle73Sb2/PpDBOPHSdRcK87z2qtzL9kygbyBWNm2eoH9T1znHeTqL1ISPW1b4RJEGJS6QPwdZFxyQVdcFJ8Exa4b1ouD8PIKX9ash4eLZFwrymRFd/zdZFUWAQo+N+CIICjmOox7QhQQZs7ac+sVJ1A3g0d0HJv+dONzDB2wLZp1kiRFPuRXbl+uQFvOYsYvSu5rXpqTPUV9R9iTJMsESZV1btLyTAAWeQiVEoueQxDXL+C3s0pY8e8ZsPgBJVohtjRJvQp6yrAWC2Sp5HY2IfG3PYpZcIap7TeNlBKqoYlFRimG+hM1pG/YOSIvKEbLgJcZJSPSkA385W6CK7JXi5B9Ns8cQaSDaPml0GO+rjR2at5AlqCQanUVQ5Ni9yVN0Y8+am0CEvL0HExzfZtNfmGVHFwtn7QabdZay7MC5IDL9Nc0cS5KWYzcWFfprUcS5NhpIKJ+T2/7GPwn3kWN01q8yFsbFxRazi7KvUj1BRaZ/G7QVNUGIac2Mk4oRls9ncPaRo/LVVLoULGtL0HO3RWMtRC3/5C7o/tw9UtV9qLjIFCE0houZ74Pnqvv4cgaLeEO8/CeQQrfS1RSPnnYRqBeJ4Q2D7PsI3B+ke+iq5IkkwoCf3RxRRHV8eNlzVPDQySp3vOXdWfxg0xsTgXe9PXNh+gcQSdZYJgAtIDFOWF8l119GHMsO9bmKDTN0t/cx4/W8yF4RTfMsawYkIE7x90BGM9rvf+CqepGINEViiT4gX2ua3dEajTThtM5Myu2bsTLKmFnj36FvqOC8MwOmmkKHx0wA96NdSI7pnfzzRM7Xo1WOoQy730gy6/yPF1/zBXZh7xdvCtNeT1G2V86BWrtE7MnXWC+JiQ5QaluA741h47RJWp+bv5J+B8gHT3UZWeV3KouwEKoYayt1soKqEhaAoFQTTyrzN7GjiEjdHUOqXSSnt5AvrxrbCLwZ5gvmdXzHworMPfLisCl0Kus4afSQkXYlAhE/clazgjkwA07KxwdCK7ci0ycJtv/qSHlGulSXKKWa+rJJ5tONdpMGJxxwPEZ+/04EDIXnUAiSQGScc3s0YnzmI/Lqtm6XldadW5KZcJ5VY6CQ5STq26N41FU0qSi+LO+l/ZDtf6UD316475uP4MJxaP0VOwlB/V5PHlBUqeTCcZdWnwnxeyB22CfKB+udWvHxnWwQ9rk1vmyXvKRU/K/dzjAitO5jLPojzR9t0OT5xM5LSayyQKi1xc/6imRW8v6Fggsa2g3FswMtB6oO0SmvMhx29jmoSSeSTH+8JbNYYFFVOhq8AV27klitQsUjnLPASOZkUnAs+PCXaTNE5dN/XYQEIOVDN8UkBUVkRqjwPkfpkuggHjC1N59AD3Q3rr5zlQi2O8u3zohY8K5zjxTpejytRIjXjpEcJ1JTt39kYXxH3FNRbUP57SM0ek7+iJqA1UJI0FAD+wXT5DDM0NKK+vcmmyRE+TFsOWySyoEyrE/HKzvH2M4tahpVglKjUFDcXWuiwCr5qiNGXiJdRDKknOBWcWN+nKV5R4Kigz7mMRwepXCG2BQQm/RRYvCbFHQRAhpMlo79N5WbicesQqvPfi3xPk3FR/PFDCWrXiWYaScgSdoCA6L1bSD6uIMjpp90+WgZpjLel/7LUx0MBAVJlID5vhEILaLXVpOPZtk82XTfapU0jzImgnMwgRZm4gM9W8Gp40yNOY6TtRQ3etUtO3ZfKn0x0Er4FyQo1x+ExpfxntVo1qT7h4NdB1MPAPJ8yDwOl0XMrZMXP0+2NrVUdwxAYy2uft6ply1tVrSe9Gcbtm/59G0dKR6STZowuGktzGLx7OOrvjE0FJA3a6TK74YQkM99UMclXeu+nU51V7TxEbpndUSgD/UQM6sW2bNGShZYuzHrMq+0QlMPA+F9nkGQ2tK7gWDLV57haXNonw/MM/WQywcfum6LnkdlwtB0NFW/GzRfjbvLKTjC2tIV2rg1bob+aQFMzHhxoOl9vk0CrTm1NeyC2M6thMApaXEV9G82i1vBSxVPbm0Az/XSwvuH3lFWBd4n76NgHbOf+Ybo/YPq5RKe2N2ez9LXKSyqT4JcGoOTEsIgQTtMomyUPZEmKZaU5cC8rhbW3eCR66Z7QwVnnljbs9pNIueB24+D1CgLg524RLuiPmstgg2NpWIPbQzBdkHUE90ObpLouv4mSg44+BSvk4BQwpSY/pYzXgNwSG64V50Jg5mbxL0WjycNS7Vvesk2wj1ZZrbRZl55SW3kuZ0pYyvB4WL5bfVwqzaieL1WMMqAMDz8THa+mZv2SVR9B+2vYGdXj9+xqUQ5/JnPQHajSbe4Xky+37yhuTiw364o3OILdNje2mVsgCDyvyeHgRh+0yXXGVhLb3RHtugScEWLRu5/XiQ7oHkuZUIPw92AMWiQyvNAkYcKp7PZZ2qS/dza+oFuWNJOA7LeG+Z6aYbooIkTmDdvTiWcL9xKP+tiz1bi6yNA6fzxmiLSyt+3YHTRPwAZVKIlFbuLQUNDZ9o4tMoio2JCgbntB85BF5Dm9pdy5hSG0xgoCQSIn80kJplycNIap3y9FGW27PtxYSbwtAIbVk+XtADtBaqrsvEnoNawzoZLaHNJw0nD7c4QwogBGVY/hps+wuyHNoxbukuHjqLT9m08rkcYZ8xCUDscuKRczgqfhifMvpHYR42yzmXYOu8KvcYc80jcVoVkqADz41aEz1K8XKh9N4BUpUaopEaoCW1zk5JAa7wBb9AO58Te5HPmPUCjbu9ZKOXRczuJl6vkadFmh7fp/KSs6Ux+ULbviMUOM/IEiVsWkZtwayu7m7CpXsTx+rXERJGRKb4PiDR5wLSkut3FFOlWDdRzm9QqKhH8kXyFHovNsX2NeJI110yVsDXKtLZ8Ro5dL4a9Kh4me5liIPN8eAMN6PQHlRNyJP7nbTHYtS+UfNmKJBRagS8h2y8rq+KQQ0TT28D7ktK5qxGqCJYtH6AmWJso0N1RR1vi+o7O9MrUuE7R4LnYpvtIBnYpnlmDox2wcqp15W4XIYHFFMe2ChWKJ2D5LxkO7YIbbbdrkLoAxm/AmUMMMyVDKrfGTKX9CS1Qn6g4el8BR0mjah6u/SInJ4IbOvCiKnRWJciaXEgRQAuhRoymeTCNrRXCKfj8PDDRUGVecm40KcEKCV8TCqxrtxdyr9t28cyCOK0S4+wTof8UfPHy7BbwT8ev2sQEpzouJZFUjbF7RZaRRRiRkNlclagYamlXBlpOOYoixZJ/2cEMX2+Apn5sENj5Mb+KwE3nbw16yXTZm1U2UP+D8pV359MXApOXBw1Tfeid8YrWO3+3EDNrar86Id1HFu03v4xm+6zO+JtutLWUVJQb8je4i8FSgZw8sAlJn4c4NXOnzGGn92o1G63H0XcVbQxlqOZWQ5NNJ4+N3jnJ6bI1wghm9q5ZL5fefaQl1LOwyzzrzkuRmk4fgAsHwXU8pCssvyZoWoIsWXDesb/i9YOuEbNS2yWuJ6KC8iv2YLWCbwP6aHK/s950KwCX6CeiLo7JAwzGxX8Y6064vZmIaQnmvSow9AOC9klI+8ImSxbN39kNTAZ/POjCfo2m1je4FG8qrNiBR+jkAxzRYIM5zoahrCphQiEu38Amfq4gktbbVPuR/KvcC6hEfPS/Cg1RMUfrboVAdBPHOLfy9Z2+y38QSUQtKBCkvWm5pemMVYgb2XPu88rWChFMIBVQNDmxpDrhgBJu++hfyQH0Sf4pjXbTZsi3KmKMuigT64cKuQlsfAg5GZUPTYtXoFJxhH6yC4NmPxhMZsYBuaXgI71z3EWQNuHrZ01BULoUbEEzgIothXRoFifH8XC0WQx7+8YWyWV4oYyTO2/Iu6FFgyAbWiL/Kr0mQT/Vb7wUV/Az67r1HajKzUtp514Htfrf9NhjkkyNmzMunVvu8y9tgm8FX5J90qLl/1OvyeVuMu5zbpdwWq+z/O7ol/11uhMi9HvoaivmvUhfRJeHEikO4+Eu3vp43RTfFmeW0j4JNiwcnkG86vWGpIcCrT7A3UYEGF0uzebNknRb8GTO/WoO+a8EQvLZloAtcMvSXayMTU0sbsM08/BUYtCb06psDQJgI3sQgN28Y6nA1hZ05i1I2+e7Dye6WCO8MnBWcvBersSkWkYqXnmKOZOIT2Cr//1aCpaTe0GhlWDjN5SGBSoP32KnstEDgCbz5wXhF+/kGH7ujXxdYVeb92kf1fIfKYWIrS5N/KGJA3KWXHa1IE5nB3ZuWgJnEipXhjc+1hdfz16hsFfmr/5keYiZRZcwSF8v7oJuFI4KglorKXiRa3mJ3RtVPNMIM2p2FZZ3KVVbQlMBNKDiJdyXSJZz3sCwn/zLDQOjH89Xym/CUfNgvJj3jl6g7lP9Z+R1fmEk8mBgm9rB1nsZMeUG2GgJ0LfZNcDdvJNKsjl1LYybYyayRvxKsJdHNRyDhv3Ltejk8QhcNR1TzCu1yXNAncvcp0a9ZfySFTXo0iVMDKZLA2A4EBlMKuGX/brAsSmcXBmQfoXvA0puv+fjxwrMDOqfdYS52C9wygDjRfNrmhs/vwcX1bQHwde9e5mzMhDu3c7XjZzeD6zq89Nc8ikzuPNIfVF1h4jcmb3UMc77KGUTq5FLu7ODdkDNm3w8oDAxWdEMx2dTnC0sokKxcAOzEntaI4qgNheBvmF+52w9WEfCEoQ12Vd0jTCOm+d4iviEW3cLb0z72Wtloi32/a1pyhvFUaLaQaVpf6kyz0wXoZFeOyKJhI3kefacvsMXgKIzFPcoz1w208awgjEfIV67c0Vo2+H4hPaik1dycuWfQeVtJhuUNmjWMtZGPIW84jxhugM7zrd1bmv1DGuA6ZALkNfDe1t4GNIzt0rRlzYMe3/eAjxOiNf4GoAWLTCjptcq/iSaDiAqkRUuIK18aH/aI0LDZi+2XkD3cWr1g+bsLJGzTqpRKFAtJRcmzzCzFYvAqPzYxBOHl1wOqRrq928APaFXrB75coz/BeDQTw+lhRx0UrfWNadUvCSkYpbxoGtDah999dXH8u2YcSgFZbVHvhgCRnximZHY/dIW0rjD/jTX7TRQb7STPR4NKuMevHCrY8isiyAdPFwcNW/eN4MXziKZvcukgqErU8vgM9Di76SqV9AixObpDrrC7o+8gOSkWLDndp8JPfS7e2/TQ7HVtRFKHJcRJ8hQkA2pl9fbUwyvJwE7ghbDR2sB0pAr+CiQIt1cNWPrw3gmqTXQjYoo1l7IkeTES/V8CMb4zcRtPj2NdsMOgQ1sA/xnu1QwZoD+kdEgmIh+i7+pumKt4MP5TtXIJ6/vpr+T5GydbdNJD1WczSdiSonQggBr5xQTk6Pp8H1qGevWbnK0xqyO2bRq3OriunhSv4TClT3NPGCcL4hqTXXfeyqTKxP1sCerw2WkoD/5C0PmyOSFiXFLqdxCQNw7D4deunjZxGVKCUz/mWLwFYU/Uh9ORfF4sRNYwuehfxu/9bXKv9ogsafCZT2CjjwG7q9Xy5VCUMgYnSEz22hTSKj+xfWuPBNKKVD3EBXgHNNxuCaxxXu+4mWnReLrICsvb3wpow+8kmaXExLHNUjluP078Puvf0lpIwovgvDWA1tInvhlTVRHNXeH+RDJ0QVcuu+E4l/e2IL8HCXJmx4RPZcHHLAHEXXKu+3l8lPmL+zbqA4Ex5o/UO47eRqtKMxQl+9fy4vweC91oKAA6OQG/PD9jmJxVVRvVyZ5KYYrmaMJtI9xnrTCSt7Ad5q6SJoCXxOVqwJ2dXNh08wIJu+3eho4mOv02yba6eBdKlmcZ+T1afGhOcLrwaiAsYJlClc674I51wdc7732wcWqZ91TgwmovwjHWxm/fITdEeZfBfhte1n2SZOmoxIP6GQVXsdLu6H2IfUwU9saKu+AhPz+Z7pXGCSTlIt9AdceyFLjjKG5z6q8HR9o9GlUGPKcrq1tZJ9t558XN+lG6UkR0OT2aLcRpXPWl+cJbwfSRi5SAu/n9Qh9XdihFJ7Jb7iJQitwjC7dpXO88tTOjEZD3qfJaC+sPnqw6242BRQkRxP528vPD1AQOHVsz0hmcVdU2l6B2o/juUfe6BtUgdGeh9rYulHzjAf8CJEkqmAhoYe8jy7HcW5TxomWIFZdAiFFCP9kOfk4+FrmqvvwIk5P5JuKh56BCNxTgNwacrc8Zs07sV7lHysDq2uHyXaq4g2UMh5twT2+OaWtCdM4ZWz+GT6p+d7rGAyZEOZPcqyOaAM644WpnYj54Q1ss8l+eIi5LD7EY7IwQu5MIYH7sl9I7vM7oYsBcYpWTpTZmlc/W1x5SFDuC9NRuMgBXg47N7GZfF6sqyc/fz6j1npw28mjeU3uVx8aJisJ3WR+vYgAlfOZWdP4DdgtmptbtYz5ehIJ2BLpkgy65v+nyop5+CDDM8ztsQmVs9HtwgPzG4H5fI21shYo1Q+1wi6DRs3b1lt10W/Nq2PMXrsSdsUTLAg+8Zf+mXKn8sUoFhPCE8mVhllTf+vxmcokHDxgYkGaTeAuscXpyvHC/adC4rQKzndyvAiTmcDtE37/HDfQzzphjfzO+wWOyvQ4Itnnys8O6cwv9TqLYxNvwLASUIRmGZbhK37WWHBa93Os4v13c2igSj3Wy9+cT+QnajzLnbK7+bJKhMV11FxRxpU1AwDSPyKp0RiiQhZ1NSTbzM1pDHjI2xalOlKEYMRLZq1iLXH5e1jwOhruJQ95fDYhi54cLjly7jaTGWLS5DKUDAybfrEEX4pQ6akLa6/OzvqrpelH6tXsE+YTAq/bn0wCZ0DZsr/6KndR7iJbr7Mz8iGOYpsND0MgTuBwaTw0lQ2zmz3U/td7s4+yWeELfHs+bcVcrrmmZ975ZskSvwokMK1EFzcowJvVkdufVMkxxjh3XLTRxof9BJniNVRt+hU9+50FteF3XopJyrzhzmV4usma5iCLIB9x5jfswcWsDutopqgQGQcVRHs6FgvF2XdTxLKGed18jwZcscblnli+i9wMZT16N0YzqyN9hiw6RRs4N8rU+4oezjEZIoCpwJD8sSGN0oSAXf44VphpM5nf0pGAp0VJbv9M8QQzSO4pElsl6TG7SX4nEq1fuF8dmcUL3dosGptAo/SL7YYQPvTwlq0f5cuMUZjlVPst8gbOK1awbEs17ROV33JGLjdm9JF+17zfLXghncCJjWeq6vkxjMzEb4z7r8Cyh/sfNmzVkVqi2CyxG0VCEY2Ax5KobmhAOUtLTXmA2F2PokPNGz6FYeIQNYwdCJgPzR+BJOC9w+EWFVqPKJ1c99b0XORXdaPYg+D5ibwOOac2EKEUMpwa8gzr7VCkupO3uxA97bDW+uE1Y/75Z3Znz1/8LrlkmEgV01/H6rwOJZQT9worDO5YNzBqpYuAxutxkzAFG94Fy/LNPAOGx+8qDH7q4qiHybidWKbaKAyRzutD2T5F6EtrF6DC1t5A3lNCZ710CrCNAA2vXB+u+P5LcQvHKPNlWMuDLegDGoprLV8djE6HvYxKKDVK7zJFdqZaj7w+nAP6oHU5uxUcVQu6CFM3PsWl5W7yVx4D7bHCdoo+2u8vZlmtvchtLPGhRPd8UyfzIqtQjvdraTMi1Wa4UWrF9WbxrS/AJhDjbSv4vZbdk6EW9sojdAs62q+TGFSvecw13CsEMyioR39iBGOCUJfb19jp15IFiXPBapnVOr1O4lYTJoI9M3P9ajI4Eq+QeqDVpogLKLZSTExHtRFoLtOj5iO3Xb5h+ug/Ur1k/lekZC/7GrccOtbf2sL8zZjU1WyiUEGgeGnBlrPxMrvuQqe6AFob7dOhV/RXEESVRZbGI0mUBvlPdmD1ADyZEKsNAPiqqSt6uchLTj10ek4iJDkNQYCF0JeoVYHQ5iLjyqq4bvakmGYDkiXYjuC+AfEDBL4nmF2vULEWV6ygyDXHTJ+uVftsw9JCFj0Qoui20FbV66pHSWlgMiFPMbex9JjZRAhkfo8YZ25zt8swFI1ZGdTe1wqc9siOB/9Mg1Fq3U3ErHFJgOK9fI1sDUCGf/5vv6etbVbDePFqWQF7YeVwZQO5SgPCBa4AmX5hMjjaV2r2s/SkxFYlAGILUWgk+zex2gREryE004kGSv25E/SW9CR2N1KB1/Rc2EKasJ9iXN1/aN9lw5eDvp34vVBdtXi2if7TvkjfGMATavji8NSw+NJsPiBNPq4ZAmmzL7Y8Armx9gjdwWVu510cOKP03xOcZ+Ih3tzjHqVK0/Qb/MWdJdBbuxUjfB4Ahxl1jUarS1UfayD5+gYANfYOxqguwI/0qXwtd4oks2iVRfYwHULc+r1H3+R4T3IyPbzUUCVUZHWkKWn6Xz1wYpki/YvjUyj08tCZFO3/DdfKIfMnnhWey6nl2gFCR5Gted2/K2q1dFJWwOT/O4hzWPf5Fk72iFY849lepV/uGGbI0rVaZH1QKWNuNNDvNd51YqtieM8ch3l3GXqG0gmu1Ra6wUCZ2bchazFXyJNRuAdlcLYKzjf9DtJDRQN+SWiqNa5v9o4CDY4KDnu/O4PyLypGkBGiWXVtPF+CNGDcuIxF7E5Ls9J2zdLN3+GG+3rGZ8A53sbW84KvcPtTuCRhRXPLKodNB70T5lR0RNtY9n/grsdKDS6vhnG/LZSygKppuRT3dGZnzzC8PDzUWxhIJeG0b9FZloSE2XpsFmJgqj2FWIyVnE+1jnvzHY8GZOwXa+p3bds558QbkbezAmCdJzzzVUSU5LyJk0Wkh/Ge772vMcfLg4uIZWAC0QHIeqLegOaXmfUmLNcb5tjKzS8kRf91snS8dqf68CG7inPaD3H/OnjtGIBGq+vs+/0j5eg/t+fVn1ucYr01FgUI795L0OnmtObu01SyDqFjRdpNfNBwSge8UJ+fDTdHH8wUXuh1uC5onROwaQt7gvl8tvu13RbZs8mW8kkegjTGRDasPwBFubSHt18p9f7zoEF9bMR5U0R/wHEdDAYujPXg5ULmwvCoFvcVsnI1ePJyEH22N/fsTOSHyEozq4+CaAdjsFWnLgScVbHJBlRXwKmHiTV/Tf9upr/l/3VKJgIO+2Ey3NkstJje1e/wKKRkgdIUVjlxoGf7sdGWyBPvSxbmqClE+I9UWSpaRqo50/EDPOsqU2Xg8UyazingS3+53JNw+08oOrdKTFeAjgRsWduv43rNznL55kUr/VLSX8vEvO9B3hWBOFDgfix9H8U2JlH0bIZ/KbPiEPiG88w2dE2BgfhwZCtEfnjWJEQQqPdGwurubF5+qYax5HgEbEmYDk0ZqV5SghsrAnTT2miQWwvpQw3trD660csIq6z0zw3K/fhC8ky+bFXGDYTloWj7LUY+Qs2LdSSLwfbfbdHRXlAvPmVUbZFSh/2iAiCk92V5aIVrHijwU7BCe2dZj0R7aOX7oCY8TVWvNmllWDVCXwfYBbweYOTD/7tKiQYbBlQsg9HTFQvPdjOc+Mrs0P1y1j8j5m8nyjVDa+AvMMeHwYOygysoD8EPjS0627CEOqA0+ehYNqLZOnsGWOkII0Ewn3WFMaa9sNTv/7F5R/ItFHOdjzL9QPojs4dnulzgrzqbO/q6iw1UE0Kj+CoOrESlvuKIc+Ivn84f7Pj6p5ENT1GLOG/tXeSylGku/hEeOvjDo2Rm+vntNZjuvTwOdiCI8RYZ6ovzTE4bP/WSSy9sMpdVkN5xykiMz3BJUhCgBc8BP7e164GjHUYhvCG6jrX7M21WfjMNB5KG24Z3gTR0kB63XXaIxCIPC1sqAjnBSNHer3pjR1+p/2lwQm0cbx9F7fdj3Dq0cs9G+iQQ2w/9ldAI7jc+lZgDK9VKn6ccJZl2bRKp/J7YTo8mrqqx7qVkJaDgAklTUo0oh2xeO9wQ8c/IZNJOXCflkwRutswsOvx++jsUyfmT6+HnNxc5blAJeLbhcBDjmw0UD0RBvZZ6Bqi2gWQ53/aWO+lViRhjXTbc2EqJGFPfAVczCLYOF78ZE85kSHlrCc/S1ixpOzDueOeC/sb4C7aFKMPhQ+3ptw+h8s8/jxeiNknV8Qf5/6rgJd2h/Frmoo6CIyNbJ3RhDlrqXAIBC5koNIWj2lrv+hxtBE81SUffPe/W/ZgZcyKkGavQiPbyw2K21tVp+NfaGHUZj+HK2huIwTnpHMfRX927Y4B9cHE3goQv+WPhxIKEirXTGktJzjIqqkzxcgkEOcLSdRNr9lah0aTdM6oSIyHdTJsEgIjjHORliemnabBp5oUyQKfaDF8DzOiuHgw0ReDNTew1R5oA96m0mc8gxLsw78PAHfX14mHKQQRLNstwfhyZrmliBzkcJ8DP35yNGQ45lpSH0XLVDKcZSwiNHJlLHR/5IDUincfk+4psxrmJRU4TkHRhniYpm2fhiol3CgX4rajx22XGZQ5iIwzIjXgAGEy6gfbPINpmvqaJMnbhXzL/zOhQaTqJBHRPB/f7C26fZ++TLyB9s3dJQDKXQ3hhgqv8wRy0is3fDOBua3L/UF1X9CVdpS52bOznK5iKRrAeLPbweCU44ie27Q3cGkwO6BEKL/fAAIHqps2ohJjhOXDbyGpoR5FPTphonhs22nTNyQm7w+Fppwp+GifIlW9erI33k2orXoeaJuPme5pnh9UUij5zu19syriSU5ggkMnM3ivosnHc9tjd/AGC0flwCPWsUCgEJM5+U0k1ALpTpJJMqwa4fzHIVOla0lEMl3pDPRxJbTf7WWV1Fo5gz0wrP+0UbePBoFgykSXIwHedoM/gwDsvJ266Wn0u3XnUPII+BM8b1G5HS8pfVPzyXiDePvGYCcXK7LJkuxH9poIrl4Dzp30wTTU/ZPDZ/5HrngWCA9wMzYmkDCcIq4uSLKA2BKk+8oO9tzSOMWV05OOXOXZ0e0NiyN3QBLNNV1RrUJYrouTYTlWoTajcB2DpiKAXgruwFpzbil62uaQiqFamEH55qb0jwYkGhORwvLosYWZfb2JiYZgMC1Ywy2UxtvPi5rYtcYJjGZqjkBfeVhbIWvktcCjIYnHrkQGssG1kKShK0xCqgA7Qmy8erTd+9HUpAqAoMgKgNb/ksyZBazyQ9nHH5rngzZ00dwfj0Zj54ukOv9VHzV4LE3zmpePR6DhkXu9abx2sWAl8nD0h0FXuSVk22o2blifYv63qNw/zUKYsAzo1rcT63tpd99S7jod52PItHi184WLaSB3WcZ+B4Pq3ZBYNnzlFuqWcesjxqnqesKx/lPyy/7QxqdwWqNkMpyhAK2+7/EU3GfK9d0xSA7eYOo8JR5Sq3s03VMYXZLR+OvXhhDkJee7eq38yZGiSaOpI+D0rxb++F+GWTzaNi5yH0rvKfPTYWDH28McmGILsFeKnVbJ6fE7/a15qDDEiyYi/hydpB12fyXNnARqw1zrEdXgS9O9KoMQG4GOySXDGm0mJd9AC8y9AkUq+mXC+T6+VOIXa8m1qb1ScTol+iu8n24hvdtKmnKS3hoAfRagbmc23tzNigme9ZBPnGltrlPtnP7QJy0WRV9K955YL074uYuKFGLs6r7aJ0WsyuD/T6ZF45A3nElhe5fgLlcmCLFtIl4BFuQxOFjPpA9otU8bIfC3xwifpE2RlSsq1CPUCJgk9giDDTwnqORg955VTMFaMm6LD8LczP8ZoVf6yzdYJw8MKP2jP81u92F5n2vnPuV/aKmXondri2Ko+HDg+t5sg+XbekVFoyw8n1Qe5XL7YcQ7slPizyZYI1wxztM606vZ64J5NW9/yWoQS55meANM2Zi3wijpWZwafsgzKjXVyhXLw4EszqQIXoxLJDVSyUhPhMQll81kTw7rVb/2WFwI1PIBKdq+JjXYqdkrZTPHOgo7mgsueUPs89nOwefepf7xAFZ88GTC9IdnVbMqTWwul+9tF4waezQVbnMSNCJTbGSn3iDHnasMaeaFMX0gwuGZGfrHAgUe3p6/gK4RIooS9RxI81ZCXHyrbY6rwWGMNmNNyC9KG8XrKv9bRACbI8rKdRFprq8ogoqvThAWNIGFzrpH7ocsWoI8oDFz9qEX3fdy0vXdW9ht1vdUthzdMhnHeU7bPSa5sUFtn/MnUJ7WKRuCF9qJjP61fHdI9b0EmPyKLWfzaHbBDwDv/pBq/bxYgKlySkTYpOkznJ56/mWcX9/9fx5FW9Ig84WWHkfmXvzuqnefvgX5hoJc0Djz8BD4R+M+/n7xtBBz1rpLG7o8LGbzCUADdt4I9DQXoFF/3aDGVam1GGbEoBeS6HPAFnZJ502uzPKX2dlQ+1WsVOUf/2tS7MQ9/0pehfY9HAlrTKKdF7h2ZXoKkISHM55QV+2zITH/PSnPRAwiKL9TPkQpaxuP43GhgS1jxqezk+77sIkiKVPLvaWw2dx83QDGa9WSRBYfPCKrE3aSzJHszi5WcCfIL2Q1Gg7koa6Vwjk9XJRYgvY75StQGhxSCqQptCQQy9jCFcctnolYbX+zHTnHZ7XT/Qn8cVD4uzVzmEHKxZWINVQWtwQwimBbzFXxqbDj39N10p7CZKgK6M0G2WpfgRgnU3/+SjEZViNcLxt8doq37juO59ImsJDkI9AfcWlZ8TSmRWji9lAzEU8Pzf+KNSSuON5R+JYZw5Ket0gwbgGToqH5/av8jaOFMltq9lUeM+lhNm/mELD8ZyDaEA7FNYM9tYWJuWLkPf0yWE5DYKzOBIebRxHHWs0Jqmaf/hjmYyq/UtaeL2rc9bD2NdPDLqB+sfDfx+XvlM/zTe3H94wW+o1ffzFnI9qaUh+wm96nSnA3/A4p+lfNQEwnerqqcZGbi8K4HvKiqnHTB9M5Y96B5srq0yo5mkQUSbHqw978kgB2uv0dmvb0nZWjhZmplS4gsYlqY/r/lOaSvpz7KbbBL2sxUKjc3FoL82D4+k5I7DfKFkP0k8kpLITGocmJxE1ZJYLrbuUjfzEqplysNtJgOxxGNSXe4rZm1nDSZTRY/M0lgYhQJhH9xHa1LYcXYqg6uzqe6xHkU5Pu0dIC44R5TmsNHDxxIg/eGGbqG9WVcfAGulLgNxMBpSo1jOPAsb5MCtiZLzT40GLFXuiU7Ju5jOLJ+245M8ymXGfsWQPmGo9bTO/EyD54aqBZWM+CRlUsZOqg52S7lqSXn3GsY2MwQHhEPcLmxJAtCqCUyEWZxCgLY17CDOZj+sQDdCeSrr/X2ZZq6OQjtP/WqNUWJi91tpw6tpFjC6mLRxyITMt7ARh8kphWNfKiLGSMgDIoBuxSVvNZNfs4Uo2i5ALj62IEij4+99IAtQLUBLnAtiVLxwLk3N3eb174DCGLDi2R0EJoHpYiuQf5MDMvC41HVylQh8Itv0YCj1PvIPIidTVlOQdcPLZ1wTxXf//hKN2v9g+KM58F6BnIHTOx+rESCHfJiG2Jgz6y3P+l5AbdsgixIJQgPhWSCjfBZF5BqehXOvcsff46U4WUkZpXiqsOrJ4IMl5tcy7bGOXAwjh/ZsNbUj1M14bCV3vG/oij35El33my88t5jVYiigspP5F+uVLt5sDPl4O6urjKlgbAK0p/Ehn+kGWL3KCrslLCHagzdZHcraGjOEmggqqm98BfMsSOOnJhx72WyaUHX48OFHtc65I1hyWjPL2HN3VX5n6XgteYRbvZkQi4nmFB57DdKk2tkngcvoIvsHWErZCPnqIGwPYLBFGnusTJduvDrfguwSsMensmhN2jZE/MG2HY5bPK18M8OI3idSdYPJI8CoK9jGrFg8M0Oz94E9/+rzmfokgSf0eydD7KWXPPs6c/KDVsmBbVPeX/KusMSnFmU2K3Gm8Uvi6bD1dDtQZLbCLp3ZkOVe1xMdJ2BDO23VKt+M6UdzwgPKinMc/P4GkJa9054Zum8nRXi6H/KDxsDJMnCzBuvHp4leULrJ79jr6dTqqTDcTOAdyi70RtVJ6mkXK6XAYlYjM16gZxZELmBO5B2ZKZ1Xe8Asn65J+sCnMibGPKyqosG1V7uGZOevvpHeLAKmDilUYqM+NbHvNs7vmD5DZjWSyYZgvm0PBcdfIuHvT7TVickmEKp5kQdKyl0nEebtHajMFB+qCWrPKBckYk335h3yOfWe3DNJm2q5Sm+P+D6AQB6Yzve5mJGzX/yyFJjpKmfVpIAxbFHzcnBegYa274qeb8whmxvRGpovB2IXafpNO2TiKTRtxXzeK6QiyeHWEO1pwb9m92OtMccjX69MHbpZ9l/CMdefS17BGR7h03qLccvJ5s3gHGoGfiZjMmyAx85Lr9c6TzuOTENiATy6Wt6kkMSTjMcZVmQwfNPWxOPmU3LcIOsVVUYS8B327jfjOlvCa/cNpEZa3+LN77HvQnfoD1by+yVCmuJTTax+DJt7MSEz25pTAXXO5eKytgCn80+Ny2vWMjeullvJHhfQZ22QOfR3n+VYDMsj1G+rDXSkXOEyvmp7HZkidPxXcVPQjl/0bg1CUvdy8WA0+b0/TQlDAcP1lJBH7A2oE7JP98UU1TvFna4Ok6blhiP56+4pjXovwH4uEA3l0emyw+AiecIrogtoPaH1hUMB01j/7ibyfZn+6vRRMCtnztIgqOp3ApdiSOKpxedDBhosofsckIVHzw8dXPh6G6TaelF02pg1C5GjFL9KZazded2TuYYTLZGIW9zeKNX89SroGgisiLtbR7au5l7MhllXODpp5jKetMHV7oQpBM3fbyER/m29lNQmtaAmp34yWE586n/Be3coJsX6QB5EacHgLK1yGk3cgtN8/yIDSqoq8iwVcZt8WxcTlfjj1PDfO54vtRx++sexUNlpHLxOgINbch1RtzxJCVy/xvMVrw1grh3DY6ASSjeQRnKWnoBy5UJaN52udrxF0uElIp+MetBLzxIrja+BF76pYBlslXRNrDdKiBxBNzmFa+zpemREFh233DJaIXzpFetD9bKKVzaGj1wLatcPxjjBYJED+9Q31oFE2wS3VTIlWt3cFAxL3z8sdfL+hyW17VsMp6uIE8uYjv8H2G891E43OX6ASdEz2aVXA5sLaGnu5ENFOhXQw2XXB27/ZhQK9wYYZiOi0KqjX0yt8B/b1VMx3efe822rvbmvOMtr8dmEWb4nQc0QNMqXnLhZ4eb9dj76gI9nCaJDq1cRV5v8RiNJPjKa8qEm9Blsex13hQ4IMhDig+2HuZCvB4nemBBpBCeozevZlQQ9HGctTjrLeLurQp1dUVg1xDriL8VulOmV239WpEOmcn1TL8f0MIEF7u56WZ6cGzYyGubiyXC+VbQ0hQSCL1iEC/tDvQ+rdlx93oq8S+KjCweBWg3iKZUSHcc4K8PH1xuBFD9IxMA3AOlTuqhPQUQNTECTMRT1PzuCsFmFpKK6Zy/sO6Vc/YL8Vs/PQpCtifkvdl42aMArZu6CgnRDrNKyKzOhRNjDjv7CFgfjCBbtKSKJScoeNOHIo7rCUpxhWP7sqcUa7/Q+2UsLU2NnWo5O6/Ko2K5cikyLVjzA/nbay7sIPmZoxyyKwphPCoDblqQAKcsjxQUgUBP7SRkPMn5StSeAJm+Kx1KtaK4SzFZZPyocMntkJbymfGwCGNZbTGfJJLq/qyUVRItxY1ehnT1pE83dEh2X4jwihnFfC94gI7zgPK4ki8/6dWtJRSFx3pd/w+FlxrDHUL/n5lqmbg/Vlhdb93CJyayTotIY9CeUzaeIFs5kf586mq23wP6dXMSuO3f3SpaQJGhzkzmKK9OFwd6pqA1mmqJP6fRyRwSq76R0JIvl9b7jzOY48lX3ZwWowxePkyw+aXRCuZXcYwfLtKBKPmbSRk8j0D8APxhpqfUea1Ze/bKzph/uU8gp5HSQgAOw0Wj9o5zSFPv1oNq3Ya/5LpzBZPrQgARq2J5Mz+cIFRDXGZnBM17SlRxAdOx3s1k+qVh4AN4DrYKri1NZMSt0TzeBt6uBD0SE8VuIko6vsSyrCp2wBUwrmy6PhNs6FB6RbfcsCgoEnK8VC9lBIWjrt1nTlLRY0H64KS1kMUuscnOy3/D0iy5rBEMmrUmgUE/veos2K6kRikZTlrWOOZ3MEfWrt4OxlcEzV5FX4SBVKn2lEDQlrae+pYBq/lIPtt/2qudCFun3X4mW/nen31kFsQqs40vvpdSftDvZuxbPl84eHkJYbr5gLkrDVxkT9K+9vFQEyw8qmzRg05KSxixgxfCXf+nDkFibdtLpz3+W+xCtsN9ydDAbgR0w6ohMN5e5kS1qU++/a9l4JxS7VIx58LCfUHLfbRDOnNFB14EkMz4zSRlT4gTAwPoRp4k2odnUwpir6xKFu/PdH+df7KvzRC5gsoYbhHUZvHkWwzto7Jrah7PSQ6VfUlxZA10APJvXcC+GsexMkm8ms7f2JELszu7vUsf6qrDyppOP3GA5y1dAP7wyvxd4YpSLq8du98v2+CSTKV+KI5FHP76ZglWCIrg0ade8E0kQIw3pDnqJBhaUpjqepol0eB34NGSibKZ5hytF82K6RTkOHhfIdbRjqKcv6AOsoSh9QzIo66HgAkYAdqXZQcOP3FAznnl9zSO+aqnQ6zuMXs7edgI/0ZQeQ9/gM1Uio3yJ6W076CedPjJqhpYlwLzXxGUCvqrdk42LVqgQooguER6HirhtZ7yeTRSOkOYBOmT0LZb8jB+IYcRDYV14vZjOM/NqeeHT4u2NmKAgf/tll+zlboutSEpTZi6lp7sbHMWuZf6r+0Ovy5cHQUbrFU11g7PN7lAgGeDHNVpZbpyS6F/sCoOkO70EIUVq1LFMSWMkFmwUUA8knyWACX7c0uGZ/G2FpvuF5BcS+TJng3PCLOm1Sm+FEM68xRmUUg2MJw+xK45mHojX31X/O+zbHVPyIJbXn2/fy4omT0x9xjDxMm/IEuOvmg/j179WyTs+akeeY4QwaCt82MR8y/fFIXy7WpSKFrgn2UcQ0703xmqshxvNIi3s+2o8dTe5b2gxHVH32vkoSmnLKSxLCqpqGRg0FQH6J0x4M0eFJkJROtlE+M4ShmeL4sIdUBwkrppSlInU8jaPvNmUxa3Hjywnh5AuBqgnKGvcwt/RSJFSJ6ro24EUGuTleIW35nkSfCx4ix3A7v/uacUcg+bPMZAf5Ox4i7O3+1Ee839Jnwl2eOFM9I/gY8ATa/MDMFh2kRKowfDKP2ikE61yQ6GRZm69wFsByzO8cWtg9/bZqSLlDzKIkpPTcJsTUN7/KIrmVRlGfkCYtl58NSptVEOZmkDvKz+Lym/Ja1QPjmn2ZhD+4xVSHoSv7Dw7G6dDPT27LIsKBF/U1mznzV4RxUjFGH/t5ylLeZaJfaVZdPO6MPnDRrQQppeZ6o25QT9W96614Avxn8bOATfFBMIrSYacAGB+ajSoKh5jR1UkeHdq3uCrmS/ksR/H7vtA0o6LRoc72S/SxbSprKlIK/k43dpZM0qRG4k0qWyz2xP5Elhc/IWnbVCIyYCFjC/953r0koGq8FAO/atKGWZpF3m4/Qo0t1X3Gx+LYhe35AjdKYijXfMoXlQqkTiQzmUpuGJfHXEUNp72MUZt6wycU2XgBRHKoumclpK1oMAYCxV8r6B7wRW+twyMda09g9cFhhei2mmL7nYQd9MQnM6YY3Hncq8iFsArWZE0B5RJdZSdmxY1hGL+YM+ZGS0Q6iyjewvcQs8GNPxzWIzj3tToURqqfM56eJiiUNOBpGaSJnCo0vMdZGVvjuxWAwve4lMSgCaCHwuACOus6eKzp3LbQIM2V4/Sob25PmlKYxH976X/d9IxsLqMWuSurFp2Gc/51xUYd9lBY7CNbMKzIXz7UCqmZLWIlTI+qe4cnwXUwqfh33XQn5aO7QzW5TvsJrVP8P0WDQcMGtVjssItUPuaABlSPnafH19LPz/UPZGhpe689TYQkRmXfu4U+YeUHWzyz2g7y9XpXDcppsClNPiOmfXCR5D8u42Avz308YNHFUhBGY+eM/tccVmdmENR1Xvx0zCEi1YlvRNcisLFvbfMXftxEABTsW4o9Oto685w2Nhzo3zFVhhLU0KDcNN0QqYDxn9m5+Az33+Ctj74DzhrpkwVn/isfH9w8yNskGM/v1pvKIyEbCWqu2EhILFg8dFGzglFMlJTwY42QBT/e/+BUJf4/Hg0O/CjEX54LgBySQblWAC1knwb6/AUjnltlhfqd0QlOLwXnIryIFgZL2yeJWoWu6CeY75zp8jHNofxKqC2tJrLhDJ0nyJWf/TqJRZgiFX/o/+tBttyuAHlvFMSZWGrVLe2AnSypLagw/K6QUfDTUzUACDnyAFpgzjTSn6m312oAsUng+5/mohS2NOUunnvKLCFXPcEHundHdNRqmUc1PyWk9SFAj4gZSS4mAXB2OVJygXvcrJ1AQ3w3zhuWVo3TbwxSQbUH0az0fUiAcJaWctcQ6cx8E0p8MY8oDPplKDAd1svdQ5ZltyJDwtkoDaOddnGvcEGqgP6oAhjMCFTodZeOSRrVQa2jBc+c10MKp51p0CQtFqnwZtEZmB+VZdZ9NCTb3G5Z7qIG1oZdxAxQX0WXGg4KLyYSCT5/nbfKwoc8M57brUt3rjuxzij10ACSue/R/MF2ntb5kQAZ31j/M5BRsIzrkDmRjWUmkLQL3Aja3RoyUQrSiPlngUdDnRLdUmJ/Gxrqfutvy992DCRyptckLnZHNjfLSFmCbWxe+5MHU6Cw7wzHOEBZkPTyN91lIvbf9ufj7TZgBfdM/3wlr5zOKv0nkPji2MB0YlSMKh5bn6xe9LHVz+6LukrPftMhSoCsbYAidOzVKwM+VNqAdu8LoO8KQ2D3YZicN1YFjYNMDNqIagXdT6kul/cOhfyGqJEdkj3YZ50+to1VzqoHqqVv8nsGUAhpIhMJXU1RUcGG8UDtQVVOzZWryqHfV1ytlR2qZbCmnXeiwUktb/VUiJeozXI8I2Nmql6yKLoVVk8Imx0bFf/TrEHiD5rea8I/K7TdcwxIip9F0mmWKTAUsZocrlCM1Jn04R+9BsZdLpROv1XGzId5RDH+AeVgbOSHFrCyIdEiLC1AYBtU1J14Viq3HhGOc78gwLhfiecx9FccCKua5qWKfgAJwJhRRyt2pRkX/ibIF85l0dl4f1Hp5WyZIinWnkYaH4ultZk1FpshNmPYGNsnhy2ZlpZeb0VFWMIlgIp+ZWBcFagKZ/DNyNAQVmsweudfic3ITGQ20YY8mpjRexR8tQtdZHi4POIAi00+N4ECuZ0sm4bOfiAbM8n9GP9tL/Hb1UJlNns3v+j/j5qKZ4OA+w2Fc87dslgXb9gX86YKdzbcjwPWhojYM5ulHMYXplrtAb7o8KIG83I5zMhhfoxxS9x9oPQ727C8537locvSMAL6pj5h3rzOzT8IahqtSl4Ym/noBW7m4ciEtUdlnr7zRPc5COUpnf3eOkKAD6yvcAxM2QO9y5lNb9xEW44K72ed8iRGDBqZYDDypDjIWPfEmYd8loUdlYGr1S35zTdaepLK66U4RzPaLzWQSLLTOnLjWpa8K/PmqDDXe4FmeZkbH4bX3KBHyEZklwSiaRKNX/khePfg0xsLxUUn9owDwsNC5oxPCLz6GTJgLbHgWn1trORZqyN+DJyzJ9QNx6SzwLG+EN9aKjJhKvBBf7jGE/0zq4w6ZJUDrWa2kGF68Dz8PK8d0iIoXrmvRLaPy2G6estQ35dn4+S2YQsuyg10RaL8bHiqZdiz16RRGn0ucfbaRZmyI0/4fwklBdU+4TDfmJ7bWk1mvu9xWLklzibgrFvTIFF6gRQxPxkLAXu3cbH7FBoEp6DBEvK5picyKMdkzJfjv63faMtriRqXRhjbHlEuDNIv+UwSaVJk10Npf3NVif3kO1O8J7uqKYUcx2iYahiQbj3svOemqw3i5s4g9Uf46vq66gFe30GDy7ymlObFHUXZZyyP4D3TPhWceaoIBi8b/LrVj06yH+9e/1XlKQoJKNcQxDafSKdwNxjSkD/Mcjkjfgf9ww/jfyfd+qeFvX4no3T8UBH3sxu8VtuXAcpI5bBWFvfsRVzdCgtWWRibohLiKateAFe+K/xipQpo5/YG6KyTQ0JrSJ8qvYYtIttQhTzO+BVHWjDSjm0rldIhEbOc2v0qeeQTVVutBfkON7151pH13hV7rOX8/0ECzq5R6uAwNcFzqW+yY4Rjs7i70dqnYebMiDnvKyFsx5Lvt8zIUQMdJNkEC4GxI1Vnm7j/G7ZQ3mlnDE+Y5MhCxQFrQ/LfYVdqIZa6F7mWeMpk+is4GpaIgyfZPHmIvXmbWvh1Y6fdedK6H1H5/0ty5rmWN0gIuy5XsMjOs8Zs8MWipl44FPPkDvoNX0zuxeScCj1zTOsNS9sb4h7wjFD4H/dThpDax8xWNrVFeAcg79k8BRxs6BLuFCW9xLZqqVdJZOboHFgX/WoH2f3wt0n5iexo1N/PV0a+Lsa4hkHM+QyP/B0lTbR8qr40gwDmNwKQLigj54Y1kbbtiF1J0Iy2Y3/GOEeoAw3LM20eZ19GQnneYVNQ3cUMuVSVEpgNvKVOAx8vlpeFwtiJo20MliMEz/DhvTGyWsupJEU4TJ11SJo+DqapczWbHLQ6vuQcth8NLjVXjWhi2FMigYzwPDHa+EUsUC69FXsYpKV/uUhMiHh5+g7DVRuD2qIjKZvQVxQHhboC+shlkxozdqw5nWlyGkCh7XOjwmeAACtE/Ivv01IBwznXJdUivRBlLPS7JXULc4SrRATJSWmyo+oBUdJYYtxydHMmcgHTZ/MFo4s5pbnqUoBIC9HqELB3y9olfJ2ZHwbBdTVvHHKZJE+VlkBD1si7xSrS0uradXD15YcuYhSkIE1zMrxytt02yZXiwjTyYGGQYMt1SKcOq0DYmIicRxlpRAqtMeuk6ADpu8ElQYRFzNeWS5gzs6VzSM5n3jYWoxsrEqqrvzN2a1Zu3ekquESd+ep+mwd/p8r1XeD/Wix2i19r12Q2xwncsa48QlUqrXTqTmycyLzPERTRfi7bG4GjkJYYrp3ayvxLLK+PC33BtuP/nv3YZc6O70Z8BerZLeUHtZPxCnuAfke+JqFMYK6t7fVOmldbYqYG7Vj+t/ywx4Ntyz56es/ASGCHmF/SAWjfds0zRe86JJAoSh8jS+APs8usIeyRG4rklQ7WkwJ0+cEvPHcnp40SSJV7wU5X+goRTFwiXdYLVnIdEjz/0qPXhTgRlxWFvjfGza5PkngrlMW4ilgl2MYobcIAn78NIDbGiwy/4LBzlhQqCp+kJHzgMX7IYPEkUmIxMybGx0vehhfm6IBahAdP57iggfYx3quqgJTzXoF1wD77odZVyzevD24VrHnTYE9nsfBs5Fb4GiLehBf6BVu1wgc/yjLzlqF4rGfktGxT8UulueHm3s++wZA+xvbUeTbaWRjzv1b40Popd5ZNt144MnF1V9zWAzcFlTHV/KJ+XWu8DMt9LoITZZ9zW1BA1o807jWmgaVkWcgPtA3o1NQpGV+sujpnHXP47oTaenq+LARODcAza5cjzh27ttxXj9KcKZKQC+9/eN2r5pPddww9ifzU0ywwn4FT+kUMFZQDZNaKbz/95E+qLOA7VnI0s/XzvX8HzcW/KZDZIkmG3grRX1fhAhvY9kSQ0gDMs1CKHxFuGUwJIr/ALGfh3he9ldXM0ftfYZ/F+83scLUcLcaLK28KxLpE8ccQHvKoK7uqy1yrTEqu/O9KcTwu1qOASMwDyQbZxZfU4UCrrOcuZ+5smKI22EgyMYIy5r+vXrRx/9MmDBO883JhDGxATfhRV+qYrClKyhv2DHpnM8E92kcjzOkzWqsQu4plo4gxsbrWQ1hXzztP6SYRfxnL8oHSzfjvyPAro51yL0HtDdq6hlkLcV9GgwYhExnxocmlFBfXtXWeAsz7TdjzlZ++NdU+qNdOczMnp3sDDgMZI3xc+SK69xjL3e2JHZ7S+zDFtjKP38LqJQKwi9c4IRRcSOWoSceZm3Jt/Sqo2fAaHcJ2g6wZlep8IxYpOUIQG+WjEmLQbUjDvlH3XJpyDv7ICU/nrdVvps+8Boz4EadPCpH9OwP6qF/whj3Ktcad6iD/608Ryga4v3tXFIYL28rbkJs4NZJwanU5cLFMspodSUxnGTNbMMFoFWyNfWDIBPTHjBvz5nuvjrF4m0nFzTNRlorrV1UGjIESaHc/UIIZgjDt8hYE7fdjdQ6R0l1clRAQx7V1rMQoCDytcrKxkwGShTyPARqBvyZWYGemoveCA4CgLR+9j3IARoDt3FSEJX4i1DfUfu0ABnOzzznRCZGRO+lzHk51d9oQRTiy+GeQvc3xN5w7Ny4lywHI2N/v0di4tzaOWIS5PSiy7akxRlKlzUi8SPB1Kvqprm/ODBQjPaTpCsLLxFgBFh35nYdyWWtXYwcgJ0CXzRdKjiO3cfM/E9VRyghCasVqc5cTj0B7SYa8/sWuC1Zl0s6XQlvmdXpd/KtyauE7jh5hnt49PzLIZBkM22iRJgRZBu/il5Z+RcPTfNuvd77XcuonEzuzxBAgYI1iDLUz06ADXWDhPLIwDO4QfLhrrPiAYuuVHhPp6+cmaeIG9iGX4v7kX9lcO7mJXbuvQOQP23P+Rc2/rtD2hnM+vL9brmbHukqT/QQw65QGR7TfvnaVf/ePfhvvl9QbCuRYF42FY8ALQgDnqY3cp/YuWIQH56FBJkomiUgAnk5crGJycAJdKcqUsswlZTOfI9E5A4WSfbscA6796AdsfHyyvBgXK1avjn2TDpK2+zg+xylwAyQqCz2eyYMrHRosk/a3j//pv8MXgFrogNP9yQBtP00CM5q4/f1SrA3KB2TDwqNxs9BBjJcHOoI+/gVXktBJ+A4+OvjfxM0fUfdETuwl97MeN/859koXJYcomsApGxusOjb21WuTFtrt8jNo1/kxbcAfF4YZGUZj0Nkt+DewVdHV13DkXi7bkkry789wb3qPD7qsTAI+APSECdjqyoXaLz3eRyIU4Xx8STMDVlYcNSlKz24VLLrATtwRtuMp6xMn18fNBBf2r8aEmd1lkSwo1dDgvhYuIRnKOMWIPIjlqXZoJuKGuNIhxQhMjiFk0zhauSPLiFFucSRxGK/Oouv3NMOm651ZqwuifLNIsZN2noYfvqkQtCJtdgzxOVMvLuo3oLbJH4ZQ4/tlaKLx1Coq5rFAMSl6u5fkM2/W/SWRzWOOI/KKWrv3vJQn2z2sbWMwD2af134ARwZTvuDYYkoJysAVinqal9TGuFYkZcJ7LXrPqkPwBQxbhZ2AcRKBK5KerwRaCxvfqCDZ4HNLNtA5rYPVU1uPJkGk6IoE9mQ0zoDoGcdLiJQ0kC1QwdHjrbP2iJZNDPIM5ZzSYtYgxfmN/1zYppZzJySD2fiQruhDmO0aHiOBtkQErDJ/Fcs+hwCv1POfJS/Ghj71115Au3kCiRsP4aCF0EPT+ZKCMqfViRc7bnmT2na9I0X0ZzRkq3GCoRHUSBAqpPWYxpxqUes7SxGd1fTUIK0VT39fzHNCwKRIe76rNPCMb+KjbQtju89aFLGobk0Ypz0ydh8tcvq6myfNHGJRvfUVmcB6X8BUR+b8MuEmmGyyZ29T8DKYyKYyjXVvdoVnaSgfFVk+rFWstZPxqq09xoli2DDLBlib/4Wa6fdcKp8OMvsw9/P0pfv0aEFOWkRG/ymw9c83bEg4LWjJeyALBbZaqGVpUYW27YeuFi0HX7vtvyLTjpB+eQ0sHUsXMvBmxVrzpBt9zxveE8TyV7d7twzi5HiQJGqhHiQEI4Y71t+f8dMIioKJoBqSUNVwh7/XG8oBli+5AbAqwJTMA8dcNhxdjyCelEGUTo2vQMxb9YNJrN0Elb2fqHhG1eL33S1aYkom1QbAN0sdR5/xcLjrJLTfgPoxZojGjYilscJipu521EGbhXPzceK4rMyinhb4m2LKIkCIujlGSZTlJGhFTgy0zZAo8jmwEBqZpaVdjEbABUk3YzWtDTHFAz2EQJYsIpaik60vlW2b2jbWW3v1/lXSCOc7djiS+d9EhIV0KNsoNIQJQ6e9MoxVQ5BSsOrP2HiZT/l+q/FfZQKmvlDD7sdj1ErhfGvkhRFOsDVM0o0cHm4SrUVueBFB4vNk9V5IsP395cO0ResTDb/jesVaE+K5VPksHvHBAx/wiFxJlaJVdeVrG0YzxSZ68xRdjU64gvTDvCk9W6TooD3G8YW0pxUO0VLCtFRTaeWUFL2Wy1z7ZtJkx492cv4YKIOZJdadb3dk6HkBQHrELz9ukes1/nBY6sCPzrtMLJtjxNSbQoAl/M4kA65CAGCuaI85V4/pGxvRdHK5acvfxjrKEuMCAS+AQTKibRU+iw25Y4G4nm9GPsfXmr/QXPg/Lu7So/XegNXF1xal+fNiwmhvvDnIGBumiC+MXaIQzxHPvsy4YN2ZGg0+BmZSn9BDXMCLMcfsFRshVecANhVmp2b4KeqZF4yIMUkMa6W9M8uZ+8oWdpL9cBWVDTFZKxhBO9CSF31haA0WaElzVA8M0yFV41Nxt4wiFL3+OjghvxWk5EuqeNw95iVe6543+D56Ve4qT8N3GVb+hpBcAgoroxT5ndsIEA5uVYrvVUhTR8jGn2+w4ISLLrvw17Rzz6XWXZEeE+H8sy9Xrqj7QKKFRd0GmTS7T4ePosi4kJxJhQ700jLaXjvnFmrXY1ZgYPtky+NYCYgP0ZpN1xJYbt/s6cO8KlJbet8thc9LKwPu+/tVYqfmiJ6MMHddCdbhcpxsjYnreWMxgDlfjFPYRJ5JyZ3MRgCAJNYZNj/gceWMR4ktzlknDvIWoFHw1EE5tDtXlY9Q3EazTgv6PfwltUKGuDQym+kShLZ47GHZ5yppnbh8H/vVga6DCfByAW2PDlXqgLRG0VpeQYBmEDrZLKweoe6KCMs/DGHLcg+GxEJMpenoalEi8J3k81INqwGax1fxsd7G53PifsNxalRNpYmzN8bxQ8GPm6iacXA61QzRPBOzrBytro+918D/MaD1O7gjcj9HPXbGd0pC9NGXnFJaoUAgaP5heUlhXxNXb4fH80rKauFh7EATO174+xUqNnyu149p3zlR6ZAd1x8ebZZjISM33Hv2jQIUjueYIjnFHL8d44kG1XCIVs5OaJL4tL49lyh36ZRQ3M8LlC7puPheR8J62GwCWoWihvxBzeypPm0YZxiZtrYswgq+xctMKAALXVXBlCKM9rSV1RxWLmA4+gExw0/RtmTPBv1YZbeHUOB590WGRws/Yt4Mhh933OPyhp/Hh/RMHsRUWy7eYujw/YdGsaGPpGJ+exQn80H3RxHVHmpudE3jBgnzFtFgNv9lMNysagQP2+3aNIcBythTomUoCJ2V+pEOIuTkKyRsSC32C0o1KsLbLdWwCw+z57aZ9SMXQ4pxq7U9XUDASGYDbu6pyKJrPSZazDk4V5oiEfrj8EvQs+RDF4kj3Z2zrVjAOUvRbXDpxH0AEbAaQVjIo4TQJY30eS6kOyBtffAmkPEQOhZDiPpD6GSO8Ynv4wpGzunwfAUBTrDam+jK1cA+7Ecfqx0ne433sj8p1DVXhewQ80FSxwAgfwh6jsZjxmEM8RjQn8Shu0xQwSlhDaE6fgl2X4o0Vo9UoLD5yrwwdmAj6/3/fliQg2GtCTNydxBIMZq+RE4BQTaWO3uIC/wEgt1pZeB62C89F90lZwidZPO76mqcp5M7QVGGfgEr/IneP00Yd4SIINZx+zIDkjC69AMCXPEw6Zs2E1cpLalt1mkRKVnhXn55O6ZUK55OJRmNwPPZ4jg5pciDXO4n33a8yia12fyF+21rKA01peXRQtKtlb4Mpr7ZFSHIBxAdXvFbSsCqPPfXyY59FTnvhzpYiLYnIkzZdCyCB65l9uFEzsvsoMfJGDDcv6WaSMIc/veJ7311ulc8OZJS2C3Y/uFDjCOLaf9H+hR7FNlO5H82kF7QNEbaNgJQSkd/hNg84s58LM8b93zcm1GPpq2HyyEym7iGhY4IN7mnU3Jj4AhZEYsgJ3aZ7twS0vCxnZTK56+ZeX/CIT1laBGZglx4BnMzSdRiTspL1M52Rip/tixJjT3AFFwEuKRnxiQo0wYrbA1Ei5qOy4VPrZu0kD1zEnPv92G/VMTS2qtgnjgpFY5ZQewLCyNvtwxk4rLAWORyfRMAWHge/NI0EwZX4jFYu9j0hoMNRldP26Bd+Uc2KJATEZp5dPnweG+mOuSEX8raJTg0vE3yGhmia7S1XjkS0XVZ6QaJuwCXLFZZDA+N4OUKkUZWnMgv7iu0RwdWb2VTA33Mwoi7s4HagE8i4k3rzaY6c/dztkJlCw6MHzEBhw6dQwtBjWDwOmdMKv8OoVKxXcyr/s1j0eD6jwscLuSFuDyFE8mWmx7B/go0kEYQkIvQxtnyKB2zKqGtG5TEE8m8C9onIYG7/4op0nTtCu7Q0pW3zjqG46gDqql4Cb7jiJ8VUHznVopXLtMuMLlBnf7Xtz0nMstZXM0C8p5+upMA+fa6H7vhP6aMVLW94uv3yvbBcwO0kM5509Bo5JfC6pvdGe1puNTjYTTUGmjNMOozCzTbah/pqNmykMbkkp31c0EKrc5WRQckL3TwtMp2ATEzFSU2+TcdA6B5OmPi9B6ySltzhJF5R2ykzYusSqnb9Fo+tc/hUYPEDFL7HpNBX5XdStPf3Ywo3y5JbI8B5KcvjKvjh3jU7CJHOIA47fBrUM19jWShiMoEx8n/6Q1/+VZdUbGFH"};</script>
+<div id="loginBox" role="dialog" aria-labelledby="loginTitle">
+  <form id="loginForm" class="card" autocomplete="off">
+    <h1 id="loginTitle" style="font-size:20px;margin:0 0 4px">全居財務監控儀表板</h1>
+    <p class="hint" style="margin:0 0 14px">內部資料，請輸入密碼。財報數字已加密，密碼正確才會解開。</p>
+    <label for="loginPw" class="small" style="color:var(--text-2)">密碼</label>
+    <input type="password" id="loginPw" autocomplete="current-password" style="width:100%;margin:4px 0 12px" required>
+    <button type="submit" id="loginBtn" class="primary" style="width:100%">登入</button>
+    <p id="loginMsg" class="small" style="min-height:1.5em;margin:10px 0 0;color:var(--crit-text)"></p>
+  </form>
+</div>
+<script type="text/plain" id="appsrc">
+"use strict";
+/* ================= 基本定義 ================= */
+const ACC_DEPTS = ["短租處", "房管處", "業務處", "工程處", "營運處"];
+const OPS_SUB = ["管理處", "資訊處", "財務處", "投資處", "公關處"];      // 預算系統的營運中心五處 → 會計「營運處」
+const budDeptOf = d => OPS_SUB.indexOf(d) >= 0 ? "營運處" : d;
+const ALL_UNITS = ACC_DEPTS.concat(OPS_SUB);                         // 會計五處＋營運中心子處（子處只有預算，實際需匯入時標註）
+const DEFAULT_GROUPS = { "引流處": ["公關處"], "營收處": ["業務處", "短租處", "房管處", "工程處"], "營運中心": ["營運處"] };
+// 實際／預算的「來源部門」展開：營運處＝營運處本身＋五個子處
+const srcOf = d => d === "營運處" ? ["營運處"].concat(OPS_SUB) : [d];
+const srcSet = depts => { const s = {}; depts.forEach(d => srcOf(d).forEach(x => { s[x] = 1; })); return s; };
+const ROLES = [
+  { id: "ceo", name: "執行長", all: true }, { id: "coo", name: "營運長", all: true }, { id: "fin", name: "財務／會計", all: true },
+  { id: "d-短租處", name: "短租處 處長", dept: "短租處" }, { id: "d-房管處", name: "房管處 處長", dept: "房管處" },
+  { id: "d-業務處", name: "業務處 處長", dept: "業務處" }, { id: "d-工程處", name: "工程處 處長", dept: "工程處" },
+  { id: "d-公關處", name: "公關處（引流處）處長", dept: "公關處" },
+  { id: "d-營運處", name: "營運處（營運中心）主管", dept: "營運處" }
+];
+// 會計科目表（財務處綜合損益表＋會計科目說明書 2.0），nature＝費用性質分類
+const COA = [
+  ["4120", "減：銷貨折讓", "rev", "收入", "營收折讓、退款（以負數計）"],
+  ["4101-01", "營業收入-包租", "rev", "收入", "短租房源（自然人房東）租金收入及租金價差"],
+  ["4101-02", "營業收入-代管", "rev", "收入", "長租代管服務費"],
+  ["4101-021", "營業收入-代管-房客服務費", "rev", "收入", "長租房客服務費"],
+  ["4101-022", "營業收入-代管-房東服務費", "rev", "收入", "長租房東服務費"],
+  ["4101-023", "營業收入-代管-修繕費", "rev", "收入", "長租修繕價差"],
+  ["4101-024", "營業收入-代管-系統服務費", "rev", "收入", "香蕉（Banana）系統管理費"],
+  ["4101-03", "營業收入-仲介", "rev", "收入", "仲介房東、房客端服務費"],
+  ["4101-031", "營業收入-仲介-服務費", "rev", "收入", "社宅服務管理費"],
+  ["4101-04", "營業收入-其他", "rev", "收入", "修繕價差、電費收入等雜項收入"],
+  ["4101-05", "營業收入-裝潢", "rev", "收入", "工程處裝修工程營收"],
+  ["4101-06", "營業收入-租金", "rev", "收入", "租給法人的全額租金收入"],
+  ["4101-07", "營業收入-合作-服務費", "rev", "收入", "合拆房源管理費、服務費"],
+  ["5990-01", "營業成本-包租", "cogs", "營業成本", "付自然人房東的租金"],
+  ["5990-011", "營業成本-包租-其他", "cogs", "營業成本", "包租房源水電瓦斯、網路、管理費、清潔備品等營運維持成本"],
+  ["5990-02", "營業成本-代管", "cogs", "營業成本", "代管營運成本（維修吸收、Banana 系統）"],
+  ["5990-03", "營業成本-仲介", "cogs", "營業成本", "仲介廣告刊登費（591、比房網）、推廣成本"],
+  ["5990-031", "營業成本-仲介-勞務", "cogs", "營業成本", "高專業務費用等仲介勞務成本"],
+  ["5990-04", "營業成本-其他", "cogs", "營業成本", "滅火器、偵煙器等雜項成本"],
+  ["5990-05", "營業成本-裝潢", "cogs", "營業成本", "工程材料、工資等直接成本"],
+  ["5990-051", "營業成本-裝潢-勞務", "cogs", "營業成本", "工程外包勞務"],
+  ["5990-06", "營業成本-租金", "cogs", "營業成本", "付法人房東的租金"],
+  ["5990-07", "營業成本-合作", "cogs", "營業成本", "合拆房東拆分租金"],
+  ["5990-071", "營業成本-合作-勞務", "cogs", "營業成本", "合作房源勞務成本"],
+  ["6010", "薪資支出", "opx", "人事", "本薪（不含獎金、特休）"],
+  ["6010-01", "薪資支出-獎金", "opx", "人事", "績效、業績、年終獎金"],
+  ["6010-02", "薪資支出-特休", "opx", "人事", "未休特休折現"],
+  ["6020", "租金支出", "opx", "場地", "辦公室、門市等營運場所租金"],
+  ["6030", "文具用品", "opx", "營運雜支", "文具、紙張、辦公耗材"],
+  ["6050", "運費", "opx", "營運雜支", "運輸、快遞"],
+  ["6060", "郵電費", "opx", "營運雜支", "郵資、電話、網路"],
+  ["6070", "修繕費", "opx", "場地", "辦公場所修繕維護"],
+  ["6080", "廣告費", "opx", "行銷", "品牌宣傳、廣告投放、行銷推廣"],
+  ["6090", "水電瓦斯費", "opx", "場地", "辦公場所水電瓦斯"],
+  ["6100", "保險費", "opx", "人事", "勞健保公司負擔（約薪資 10%）及商業保險"],
+  ["6110", "交際費", "opx", "行銷", "客戶招待、應酬、禮品"],
+  ["6120", "捐贈", "opx", "其他", "慈善捐贈、公益支出（說明書科目）"],
+  ["6160", "各項耗竭及攤提", "opx", "其他", "折舊、攤銷（說明書科目）"],
+  ["6180", "伙食費", "opx", "人事", "員工伙食津貼（按人頭）及餐敘"],
+  ["6190", "職工福利", "opx", "人事", "員工活動、旅遊、體檢、節慶禮品"],
+  ["6220", "訓練費", "opx", "人事", "員工培訓、進修"],
+  ["6230", "其他費用", "opx", "其他", "無法歸類的雜項費用"],
+  ["6235", "加班費", "opx", "人事", "員工加班費"],
+  ["6250", "雜項購置", "opx", "營運雜支", "雜項物品、設備購置（說明書科目）"],
+  ["6270", "手續費", "opx", "營運雜支", "銀行、金流、刷卡、訂房平台手續費"],
+  ["6310", "交通費", "opx", "營運雜支", "出差、外勤交通、油資"],
+  ["6390", "勞務費", "opx", "專業服務", "外包清潔、保全、維修、會計師等勞務"],
+  ["6460", "服務費", "opx", "專業服務", "專業顧問、系統訂閱服務（說明書科目）"],
+  ["6470", "清潔費", "opx", "場地", "辦公場所清潔服務"],
+  ["658000", "退休金", "opx", "人事", "勞退 6% 提撥"],
+  ["7100", "其他收入", "nin", "營業外", "營業外其他收入"],
+  ["7040", "利息收入", "nin", "營業外", "存款利息"],
+  ["7090", "兌換盈益", "nin", "營業外", "外幣兌換利益"],
+  ["8010", "減：利息支出", "nex", "營業外", "借款利息"],
+  ["8060", "減：兌換損失", "nex", "營業外", "外幣兌換損失"]
+].map(r => ({ code: r[0], name: r[1], sec: r[2], nature: r[3], desc: r[4] }));
+const COA_BY = {}; COA.forEach(c => { COA_BY[c.code] = c; });
+const SEC_NAME = { rev: "營業收入", cogs: "營業成本", opx: "營業費用（推銷費用）", nin: "營業外收入", nex: "營業外支出" };
+const NATURES = ["人事", "場地", "行銷", "營運雜支", "專業服務", "其他"];
+const LINES = [
+  { name: "包租（自然人房東）", rev: ["4101-01"], cost: ["5990-01", "5990-011"] },
+  { name: "租金（法人）", rev: ["4101-06"], cost: ["5990-06"] },
+  { name: "合作房源", rev: ["4101-07"], cost: ["5990-07", "5990-071"] },
+  { name: "代管", rev: ["4101-02", "4101-021", "4101-022", "4101-023", "4101-024"], cost: ["5990-02"] },
+  { name: "仲介／社宅", rev: ["4101-03", "4101-031"], cost: ["5990-03", "5990-031", "5990-04"] },
+  { name: "裝潢工程", rev: ["4101-05"], cost: ["5990-05", "5990-051"] },
+  { name: "其他收入", rev: ["4101-04", "4120"], cost: [] }
+];
+const PERIOD_M = { "1-2": [1, 2], "3": [3], "4": [4], "5": [5], "6": [6], "7-9": [7, 8, 9], "10": [10] };
+const M12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/* ================= 狀態與儲存 ================= */
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem("qj-dash-" + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("qj-dash-" + k, JSON.stringify(v)); } catch (e) {} }
+};
+const S = Object.assign({ role: "ceo", year: 2026, scen: "110M", scope: "全公司", period: "all", tab: "overview", theme: "", report: "summary" }, LS.get("ui", {}));
+let GROUPS = LS.get("groups", DEFAULT_GROUPS);
+let ACT2027 = LS.get("act2027", {});            // {dept: {code: [12]}}
+let BUD = LS.get("bud", null) || BUD2027;       // {scen: {budDept: {code: [12]}}}
+let NOTES = LS.get("notes", {});                // {"2027|Q1|短租處": {text, by, at, reply, replyBy}}
+
+/* ---- 線上共用資料（claude.ai 私人頁面：db＋user）；本機開啟時退回瀏覽器儲存 ---- */
+const DOCS = { act2027: "shared/act2027", bud: "shared/bud", groups: "shared/groups", roles: "shared/roles" };
+const DEPT_KEY = { "短租處": "str", "房管處": "prm", "業務處": "biz", "工程處": "eng", "營運處": "ops", "管理處": "adm", "資訊處": "it", "財務處": "fin", "投資處": "inv", "公關處": "pr" };
+let DB = null, USR = null, ME = null, ADMIN = false, ONLINE = false, ROLEMAP = {}, SYNC = "", pendingRender = false;
+function flash(msg) { toast.textContent = msg; toast.hidden = false; clearTimeout(flash.t); flash.t = setTimeout(() => { toast.hidden = true; }, 6000); }
+async function persist(key, val) {
+  if (!ONLINE) { LS.set(key, val); return true; }
+  try { await DB.doc(DOCS[key]).set({ v: val == null ? null : val, at: Date.now() }); return true; }
+  catch (e) { flash("儲存失敗：" + (e.code === "invalid_argument" ? "你的分享權限不能修改共用資料（需要「編輯者」）。" : (e.message || e.code))); return false; }
+}
+async function saveNote(k, patch) {
+  NOTES[k] = Object.assign({}, NOTES[k] || {}, patch, { key: k });
+  if (!ONLINE) { LS.set("notes", NOTES); return; }
+  const [y, q, d] = k.split("|");
+  try { await DB.doc("notes/" + y + "-" + q + "-" + (DEPT_KEY[d] || "x")).set(NOTES[k]); }
+  catch (e) { flash("建議沒有存成功：" + (e.code === "invalid_argument" ? "需要「參與者」以上的分享權限。" : (e.message || e.code))); }
+}
+// 二次確認按鈕（頁面內不能用 confirm 對話框）
+function confirmBtn(btn, label, fn) { btn.onclick = () => { if (btn.dataset.arm) { delete btn.dataset.arm; btn.textContent = label; fn(); return; } btn.dataset.arm = 1; btn.textContent = "再按一次確認"; setTimeout(() => { if (btn.dataset.arm) { delete btn.dataset.arm; btn.textContent = label; } }, 4000); }; }
+async function download(name, text, type) {
+  const dl = (window.claude && window.claude.use) ? await window.claude.use("downloads") : null;
+  if (dl) { try { await dl.save({ filename: name, data: text }); } catch (e) { if (e.code !== "declined") flash("無法下載：" + (e.message || e.code)); } return; }
+  const b = new Blob([text], { type }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+// 有人在輸入時，延後因共用資料更新而重畫，避免打斷輸入
+function softRender() { const a = document.activeElement; if (a && main.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) { pendingRender = true; return; } render(); }
+document.addEventListener("focusout", () => setTimeout(() => { if (pendingRender) { pendingRender = false; softRender(); } }, 0));
+async function initOnline() {
+  if (!window.claude || !window.claude.use) return;
+  const db = await window.claude.use("db");
+  if (!db) return;
+  DB = db; USR = await window.claude.use("user"); ONLINE = true;
+  ME = USR ? await USR.id() : null; ADMIN = USR ? await USR.canEdit() : false;
+  if (!ADMIN) S.role = "";
+  SYNC = "正在讀取共用資料…"; render();
+  const timer = setTimeout(() => { if (SYNC) { SYNC = "共用資料暫時連不上，畫面可能不是最新。"; softRender(); } }, 10000);
+  const ok = () => { clearTimeout(timer); SYNC = ""; };
+  const fail = e => { clearTimeout(timer); SYNC = "共用資料讀取中斷（" + (e.code || "") + "），請重新開啟頁面。"; softRender(); };
+  db.doc(DOCS.act2027).onSnapshot(s => { ACT2027 = (s.exists && s.data().v) || {}; ok(); softRender(); }, fail);
+  db.doc(DOCS.bud).onSnapshot(s => { BUD = (s.exists && s.data().v) || BUD2027; softRender(); }, fail);
+  db.doc(DOCS.groups).onSnapshot(s => { GROUPS = (s.exists && s.data().v) || DEFAULT_GROUPS; softRender(); }, fail);
+  db.doc(DOCS.roles).onSnapshot(s => { ROLEMAP = (s.exists && s.data().v) || {}; softRender(); }, fail);
+  db.collection("notes").onSnapshot(q => { const n = {}; q.docs.forEach(d => { const x = d.data(); if (x && x.key) n[x.key] = x; }); NOTES = n; softRender(); }, fail);
+}
+// 線上：編輯者（擁有者）可切換角色預覽；其他人依擁有者指派的角色
+const effRoleId = () => (!ONLINE || ADMIN) ? (S.role || "ceo") : (ROLEMAP[ME] || "none");
+const role = () => effRoleId() === "none" ? { id: "none", name: "尚未指派角色", all: false, dept: null } : (ROLES.find(r => r.id === effRoleId()) || ROLES[0]);
+const isLimited = () => !role().all;
+const canManage = () => !isLimited() && (!ONLINE || ADMIN);
+function scopes() {
+  if (isLimited()) return [role().dept || "—"];
+  return ["全公司"].concat(Object.keys(GROUPS).map(g => "群組：" + g)).concat(ACC_DEPTS).concat(OPS_SUB.map(d => "營運處－" + d));
+}
+function scopeDepts(sc) {           // null＝全公司
+  sc = sc || S.scope;
+  if (sc === "全公司") return null;
+  if (sc.indexOf("群組：") === 0) return (GROUPS[sc.slice(3)] || []).slice();
+  if (sc.indexOf("營運處－") === 0) return [sc.slice(4)];
+  return [sc];
+}
+
+/* ================= 取數 ================= */
+const add = (o, h, k) => { Object.keys(h || {}).forEach(c => { o[c] = (o[c] || 0) + (k ? h[c][k] || 0 : h[c]); }); };
+function closed2027() { let mx = 0; Object.values(ACT2027).forEach(dd => Object.values(dd).forEach(a => a.forEach((v, i) => { if (v) mx = Math.max(mx, i + 1); }))); return mx; }
+// 實際：months 為 1-12 陣列
+function actual(depts, months, year) {
+  year = year || S.year; const o = {};
+  if (year === 2026) {
+    if (!depts) { months.forEach(m => add(o, ACT2026.company[m])); return o; }
+    depts.forEach(d => {
+      const P = ACT2026.dept[d] || {};
+      months.forEach(m => add(o, P[m]));
+    });
+    return o;
+  }
+  const list = depts ? Object.keys(srcSet(depts)) : Object.keys(ACT2027);
+  list.forEach(d => { const h = ACT2027[d] || {}; Object.keys(h).forEach(c => { months.forEach(m => { o[c] = (o[c] || 0) + (h[c][m - 1] || 0); }); }); });
+  return o;
+}
+function budget(depts, months, scen) {
+  const o = {}, B = BUD[scen || S.scen] || {}, set = depts ? srcSet(depts) : null;
+  Object.keys(B).forEach(bd => {
+    if (set && !set[bd]) return;
+    Object.keys(B[bd]).forEach(c => { months.forEach(m => { o[c] = (o[c] || 0) + (B[bd][c][m - 1] || 0); }); });
+  });
+  return o;
+}
+function totals(h) {
+  const t = { rev: 0, cogs: 0, opx: 0, nin: 0, nex: 0, pers: 0 };
+  NATURES.forEach(n => { t["n_" + n] = 0; });
+  Object.keys(h).forEach(c => { const a = COA_BY[c]; if (!a) return; t[a.sec] += h[c]; if (a.sec === "opx") t["n_" + a.nature] += h[c]; });
+  t.pers = t["n_人事"]; t.gp = t.rev - t.cogs; t.op = t.gp - t.opx; t.non = t.nin - t.nex; t.pbt = t.op + t.non;
+  t.gpm = t.rev ? t.gp / t.rev : null; t.opm = t.rev ? t.op / t.rev : null; t.npm = t.rev ? t.pbt / t.rev : null;
+  return t;
+}
+// 欄位（月或期間）
+function columns() {
+  const dept = !!scopeDepts();
+  return M12.map(m => {
+    if (S.year === 2026 && dept && ACT2026.estDept[m]) return { label: m + "月（估）", m: [m], note: "部門損益表只有 7-9 月季合計，單月依公司月報同科目比例分攤（估算）" };
+    if (S.year === 2026 && dept && m <= 2) return { label: m + "月", m: [m], note: "1-2 月尚未分部門，各處無資料" };
+    if (S.year === 2026 && m === 10) return { label: "10月", m: [m], note: "由 1-10 月累計報表推算，含前期調整" };
+    return { label: m + "月", m: [m] };
+  });
+}
+function periods() {
+  const p = [["all", "全年"], ["q1", "第一季"], ["q2", "第二季"], ["q3", "第三季"], ["q4", "第四季"]];
+  if (S.year === 2027) p.splice(1, 0, ["ytd", "年初至已結帳月（YTD）"]);
+  M12.forEach(m => p.push(["m" + m, m + " 月"]));
+  return p;
+}
+function periodMonths(p) {
+  p = p || S.period;
+  if (p === "all") return M12.slice();
+  if (p === "ytd") { const c = closed2027(); return M12.filter(m => m <= Math.max(c, 1)); }
+  if (p[0] === "q") { const q = +p[1]; return [q * 3 - 2, q * 3 - 1, q * 3]; }
+  return [+p.slice(1)];
+}
+const periodLabel = () => (periods().find(x => x[0] === S.period) || ["", ""])[1];
+
+/* ================= 格式 ================= */
+const fmt = v => (v == null || isNaN(v)) ? "—" : Math.round(v).toLocaleString("en-US");
+const wan = v => (v == null || isNaN(v)) ? "—" : (v / 10000).toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + " 萬";
+const pct = (v, d) => (v == null || !isFinite(v)) ? "—" : (v * 100).toFixed(d == null ? 1 : d) + "%";
+const sgn = v => v > 0 ? "+" + fmt(v) : fmt(v);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// 有利／不利：收入多＝有利；成本費用多＝不利
+const favorable = (sec, diff) => (sec === "rev" || sec === "nin" || sec === "res") ? diff >= 0 : diff <= 0;
+
+/* ================= 框架 ================= */
+const TABS = [
+  ["overview", "總覽"], ["pl", "損益明細（會計科目）"], ["compare", "部門與群組比較"],
+  ["report", "財務分析報告"], ["coa", "科目對照說明"], ["notes", "季度改善建議"], ["data", "資料管理"]
+];
+let charts = [];
+function save() { LS.set("ui", S); }
+function fillSelect(el, opts, val) { el.innerHTML = opts.map(o => `<option value="${esc(o[0])}">${esc(o[1])}</option>`).join(""); el.value = val; if (el.value !== String(val)) el.value = opts[0][0]; return el.value; }
+function render() {
+  document.documentElement.toggleAttribute("data-theme", !!S.theme);
+  if (S.theme) document.documentElement.setAttribute("data-theme", S.theme);
+  if (ONLINE && !ADMIN) { fRole.innerHTML = `<option>${esc(role().name)}</option>`; fRole.disabled = true; }
+  else { fillSelect(fRole, ROLES.map(r => [r.id, r.name]), effRoleId()); fRole.disabled = false; }
+  if (role().id === "none") {
+    tabs.innerHTML = ""; subline.textContent = SYNC;
+    charts.forEach(ch => ch.destroy()); charts = [];
+    main.innerHTML = `<div class="card"><h3>${SYNC ? "正在讀取…" : "你還沒有被指派角色"}</h3><p class="hint">${SYNC ? esc(SYNC) : "請聯絡儀表板擁有者，到「資料管理 › 角色指派」把你設為執行長、營運長或某一處的處長，指派後這個頁面會自動更新。"}</p></div>`;
+    return;
+  }
+  if (isLimited()) S.scope = role().dept;
+  fYear.value = String(S.year);
+  lScen.classList.toggle("hidden", S.year !== 2027);
+  fScen.value = S.scen;
+  S.scope = fillSelect(fScope, scopes().map(x => [x, x === "全公司" ? "全公司（含未分部門）" : x]), S.scope);
+  S.period = fillSelect(fPeriod, periods(), S.period);
+  fTheme.value = S.theme || "";
+  const allowed = TABS.filter(t => !(isLimited() && t[0] === "compare") && !(t[0] === "data" && !canManage()));
+  if (!allowed.some(t => t[0] === S.tab)) S.tab = "overview";
+  tabs.innerHTML = allowed.map(t => `<button class="${t[0] === S.tab ? "on" : ""}" data-tab="${t[0]}">${t[1]}</button>`).join("");
+  const c = closed2027();
+  subline.textContent = (SYNC ? SYNC + "　" : "") + (S.year === 2026
+    ? "資料來源：財務處 115 年 1-10 月綜合損益表（公司別、部門別）"
+    : "預算：營運預算系統 FY2027 " + S.scen + "；實際：" + (c ? "已匯入至 " + c + " 月" : "尚未匯入（請至「資料管理」匯入會計月報）"));
+  coaUsers.c = {};
+  charts.forEach(ch => ch.destroy()); charts = [];
+  const f = VIEWS[S.tab]; main.innerHTML = banner() + f();
+  if (AFTER[S.tab]) AFTER[S.tab]();
+  save();
+}
+function banner() {
+  const r = role();
+  return `<div class="banner">目前角色：<b>${esc(r.name)}</b>${r.all ? "，可檢視全公司與各處。" : "，僅能檢視本處數字與填寫本處季度建議。"}
+  ${ONLINE ? (ADMIN ? "你是編輯者，可切換角色預覽各人看到的畫面，並在「資料管理」指派角色。" : "角色由擁有者指派。") + "注意：處別篩選只限制畫面顯示，頁面本身仍含全公司數字，請只分享給可信任的主管。" : "本機版以角色切換示範權限；上線版依登入帳號套用角色。"}</div>`;
+}
+document.addEventListener("change", e => {
+  const id = e.target.id;
+  if (id === "fRole") { S.role = e.target.value; if (isLimited()) S.scope = role().dept; }
+  else if (id === "fYear") { S.year = +e.target.value; if (S.period === "ytd" && S.year === 2026) S.period = "all"; }
+  else if (id === "fScen") S.scen = e.target.value;
+  else if (id === "fScope") S.scope = e.target.value;
+  else if (id === "fPeriod") S.period = e.target.value;
+  else if (id === "fTheme") S.theme = e.target.value;
+  else if (id === "rSel") S.report = e.target.value;
+  else return;
+  render();
+});
+document.addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) { S.tab = b.dataset.tab; render(); } });
+
+/* ================= 圖表共用 ================= */
+function chartBase(type, data, opt) {
+  const text2 = css("--text-2"), line = css("--line");
+  return {
+    type, data, options: Object.assign({
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { position: "top", align: "start", labels: { color: text2, boxWidth: 12, boxHeight: 12, usePointStyle: true } },
+        tooltip: { callbacks: { label: c => " " + c.dataset.label + "：" + fmt(c.parsed[(opt && opt.indexAxis === "y") ? "x" : "y"]) } }
+      },
+      scales: {
+        x: { ticks: { color: text2 }, grid: { display: false }, border: { color: line } },
+        y: { ticks: { color: text2, callback: v => (v / 10000).toLocaleString() + "萬" }, grid: { color: line }, border: { display: false } }
+      }
+    }, opt || {})
+  };
+}
+function bar(label, data, color, extra) { return Object.assign({ type: "bar", label, data, backgroundColor: color, borderRadius: 4, borderSkipped: "start", maxBarThickness: 26, categoryPercentage: 0.7, barPercentage: 0.9, borderColor: css("--surface"), borderWidth: { top: 0, left: 0, right: 2, bottom: 0 } }, extra || {}); }
+function lineDs(label, data, color, extra) { return Object.assign({ type: "line", label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, pointBorderColor: css("--surface"), pointBorderWidth: 2, tension: 0 }, extra || {}); }
+function mount(id, cfg) { const el = document.getElementById(id); if (el) charts.push(new Chart(el, cfg)); }
+
+/* ================= 分析演算（建議引擎） ================= */
+function anomalyScan(depts) {
+  // 以欄位（月／期間）為樣本，找出費用突增：> 平均＋2 倍標準差 且 > 5 萬
+  const cols = columns().filter(c => c.m.length === 1 || S.year === 2026), out = [];
+  const series = cols.map(c => S.year === 2027 ? actual(depts, c.m) : actual(depts, c.m));
+  COA.filter(c => c.sec === "opx" || c.sec === "cogs").forEach(c => {
+    const vals = series.map(s => s[c.code] || 0); const nz = vals.filter(v => v);
+    if (nz.length < 4) return;
+    const mean = nz.reduce((a, b) => a + b, 0) / nz.length;
+    const sd = Math.sqrt(nz.reduce((a, b) => a + (b - mean) * (b - mean), 0) / nz.length);
+    vals.forEach((v, i) => { if (sd && v > mean + 2 * sd && v - mean > 50000) out.push({ code: c.code, name: c.name, col: cols[i].label, v, mean }); });
+  });
+  return out.sort((a, b) => (b.v - b.mean) - (a.v - a.mean));
+}
+function insights() {
+  const depts = scopeDepts(), months = periodMonths(), out = [];
+  const isCost = depts && depts.every(d => d === "營運處" || OPS_SUB.indexOf(d) >= 0);
+  const A = actual(depts, months), T = totals(A);
+  const push = (level, title, body) => out.push({ level, title, body });
+  const hasAct = T.rev || T.opx || T.cogs;
+  if (S.year === 2027) {
+    const c = closed2027();
+    const bm = months.filter(m => m <= c);
+    const B = budget(depts, months), TB = totals(B);
+    if (!c) push("info", "2027 尚無實際數字", "目前只顯示預算。每月結帳後到「資料管理」匯入會計損益表，系統會自動計算達成率、差異與全年預估。");
+    else {
+      const Bc = budget(depts, bm), TBc = totals(Bc), Ac = actual(depts, bm), TAc = totals(Ac);
+      const ach = TBc.rev ? TAc.rev / TBc.rev : null;
+      if (ach != null) push(ach >= 1 ? "good" : ach >= 0.95 ? "warning" : "critical", `營收達成率 ${pct(ach)}（截至 ${c} 月）`,
+        `實際 ${fmt(TAc.rev)}，預算 ${fmt(TBc.rev)}，差異 ${sgn(TAc.rev - TBc.rev)}。` + (ach < 1 ? "建議檢視驅動因子（出租率、管理戶數、成交件數）是否低於預算假設。" : "可評估上修後續月份目標或提前投入成長資源。"));
+      const full = budget(depts, M12), TF = totals(full), rest = budget(depts, M12.filter(m => m > c)), TR = totals(rest);
+      const fc = TAc.pbt + TR.pbt;
+      push(fc >= TF.pbt ? "good" : "warning", `全年稅前淨利預估 ${fmt(fc)}`, `＝實際（1-${c} 月）${fmt(TAc.pbt)}＋未來月份預算 ${fmt(TR.pbt)}；全年預算 ${fmt(TF.pbt)}，預估差異 ${sgn(fc - TF.pbt)}。`);
+      const rows = COA.map(a => ({ a, b: Bc[a.code] || 0, v: Ac[a.code] || 0 })).filter(r => r.b || r.v)
+        .map(r => Object.assign(r, { d: r.v - r.b })).filter(r => !favorable(r.a.sec, r.d) && Math.abs(r.d) >= Math.max(50000, Math.abs(r.b) * 0.1))
+        .sort((x, y) => Math.abs(y.d) - Math.abs(x.d)).slice(0, 5);
+      if (rows.length) push("warning", "不利差異前 " + rows.length + " 名科目", rows.map(r => `${r.a.code} ${r.a.name}：實際 ${fmt(r.v)}／預算 ${fmt(r.b)}（${sgn(r.d)}）`).join("<br>") + "<br>建議處長說明原因：一次性、時間差，或需調整後續預算。");
+    }
+    // 預算合理性：與 2026 年化實績比較
+    const a26 = totals(actual(depts, M12, 2026));
+    const n26 = depts ? 8 : 10;   // 部門別 2026 只有 3-10 月（8 個月）
+    const ann = a26.rev / n26 * 12, b27 = totals(budget(depts, M12));
+    if (ann && b27.rev && !isCost) {
+      const g = b27.rev / ann - 1;
+      push(g > 0.3 ? "warning" : "info", `2027 預算營收較 2026 年化實績 ${g >= 0 ? "成長" : "減少"} ${pct(Math.abs(g))}`,
+        `2026 年化營收約 ${fmt(ann)}（以 ${n26} 個月推算），2027 預算 ${fmt(b27.rev)}，平均每月需多 ${fmt((b27.rev - ann) / 12)}。` + (g > 0.3 ? "成長幅度大，建議把成長拆到驅動因子（房數、出租率、件數），每月追蹤。" : ""));
+    }
+    if (!c) { const TBp = TB; if (TBp.rev) push("info", `${periodLabel()}預算毛利率 ${pct(TBp.gpm)}、營業利益率 ${pct(TBp.opm)}`, `預算營收 ${fmt(TBp.rev)}、成本 ${fmt(TBp.cogs)}、費用 ${fmt(TBp.opx)}、稅前淨利 ${fmt(TBp.pbt)}。`); }
+    return out;
+  }
+  if (!hasAct) { push("info", "此範圍與期間沒有實績資料", "2026 年部門別資料從 3 月開始（1-2 月尚未分部門），請改選其他月份、季別或全年。"); return out; }
+  // 1) 獲利
+  if (isCost) {
+    const all = totals(actual(null, months));
+    push("info", `營運處為成本中心：${periodLabel()}費用 ${fmt(T.opx + T.cogs)}，占全公司營收 ${pct(all.rev ? (T.opx + T.cogs) / all.rev : null)}`,
+      "營運處費用（租金、廣告、管理人力）支撐各利潤中心，建議比照預算系統按人數分攤到各處，處長才能看到完整的處損益。");
+  } else if (T.pbt < 0) {
+    const be = T.gpm > 0 ? (T.opx - T.non) / T.gpm : null;
+    push("critical", `${periodLabel()}稅前淨損 ${fmt(T.pbt)}（淨利率 ${pct(T.npm)}）`,
+      `毛利 ${fmt(T.gp)} 不足以支應營業費用 ${fmt(T.opx)}。` + (be ? `以目前毛利率 ${pct(T.gpm)}，損益兩平營收約 ${fmt(be)}，需較目前增加 ${pct(be / T.rev - 1)}；或費用需減少 ${fmt(-T.pbt)}。` : "毛利為負，需先檢討定價與直接成本。"));
+  } else push("good", `${periodLabel()}稅前淨利 ${fmt(T.pbt)}（淨利率 ${pct(T.npm)}）`, `毛利率 ${pct(T.gpm)}，營業費用占營收 ${pct(T.rev ? T.opx / T.rev : null)}。`);
+  // 2) 人事費率
+  if (T.rev && !isCost) {
+    const r = T.pers / T.rev;
+    push(r > 0.45 ? "critical" : r > 0.3 ? "warning" : "good", `人事費率 ${pct(r)}`,
+      `人事成本（薪資、獎金、特休、勞健保、伙食、福利、加班、退休金）${fmt(T.pers)}，占營業費用 ${pct(T.opx ? T.pers / T.opx : null)}。` + (r > 0.3 ? "建議以「每人營收」與「每人管理戶數／房數」追蹤人力效率，新增人力需對應營收增量。" : ""));
+  }
+  // 3) 業務線毛利
+  LINES.forEach(L => {
+    const rv = L.rev.reduce((s, c) => s + (A[c] || 0), 0), cs = L.cost.reduce((s, c) => s + (A[c] || 0), 0);
+    if (rv <= 0 && cs <= 0 || !L.cost.length) return;
+    const m = rv ? (rv - cs) / rv : -1;
+    if (m < 0) push("critical", `${L.name}毛利為負：收入 ${fmt(rv)}、直接成本 ${fmt(cs)}`, L.name === "裝潢工程" ? "工程成本先入帳、收入未認列，或工程報價低於成本。建議逐案建立工程預算與完工比例，成本與收入同期認列。" : "建議檢視定價與房東成本條件。");
+    else if (m < 0.15 && rv > 300000) push("warning", `${L.name}毛利率偏低 ${pct(m)}`, `收入 ${fmt(rv)}、直接成本 ${fmt(cs)}。建議檢視房東租金條件與營運維持成本（5990-011）。`);
+  });
+  // 4) 其他費用比重
+  const oth = A["6230"] || 0;
+  if (T.opx && oth / T.opx > 0.08) push("warning", `「6230 其他費用」占費用 ${pct(oth / T.opx)}（${fmt(oth)}）`, "雜項比重過高會讓處長看不出錢花在哪。建議會計依內容改列到明確科目（如系統服務 6460、廣告 6080），或開立子科目。");
+  // 5) 收入集中度
+  const revLines = LINES.map(L => ({ n: L.name, v: L.rev.reduce((s, c) => s + (A[c] || 0), 0) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  if (T.rev && revLines.length > 1 && revLines[0].v / T.rev > 0.6) push("info", `收入集中於「${revLines[0].n}」${pct(revLines[0].v / T.rev)}`, "單一業務線占比高，該線的出租率或房東續約變動會直接影響整體損益，建議設定該線的領先指標預警。");
+  // 6) 手續費（平台）
+  if (T.rev && (A["6270"] || 0) / T.rev > 0.01) push("info", `手續費占營收 ${pct((A["6270"] || 0) / T.rev)}`, "多為訂房平台、金流手續費。可評估提高官網直訂比例以降低平台抽成。");
+  // 7) 異常偵測
+  const an = anomalyScan(depts).slice(0, 4);
+  if (an.length) push("warning", "費用異常波動（高於平均＋2 個標準差）", an.map(x => `${x.code} ${x.name}：${x.col} ${fmt(x.v)}（平均 ${fmt(x.mean)}）`).join("<br>") + "<br>建議確認是否為一次性支出、跨期入帳或科目誤植。");
+  return out;
+}
+const insHtml = list => list.map(i => `<div class="ins ${i.level}"><b>${{ critical: "▲ 重大", warning: "● 注意", good: "✓ 良好", info: "ⓘ 資訊" }[i.level]}｜${i.title}</b><span class="small">${i.body}</span></div>`).join("") || `<p class="muted">沒有需要提示的項目。</p>`;
+
+/* ================= 視圖 ================= */
+const VIEWS = {}, AFTER = {};
+
+VIEWS.overview = () => {
+  const depts = scopeDepts(), months = periodMonths();
+  const A = totals(actual(depts, months));
+  let tiles;
+  if (S.year === 2027) {
+    const c = closed2027(), B = totals(budget(depts, months));
+    const bm = months.filter(m => m <= c), Ac = totals(actual(depts, bm)), Bc = totals(budget(depts, bm));
+    const t = (lab, b, a, ab, sec) => `<div class="card kpi"><div class="lab">${lab}</div><div class="val">${wan(b)}</div>
+      <div class="cmp">期間預算${c ? `｜已結帳月 實際 ${wan(a)} vs 預算 ${wan(ab)}，<span class="${favorable(sec, a - ab) ? "pos" : "neg"}">${sgn(a - ab)}</span>` : "｜尚無實際數字"}</div></div>`;
+    tiles = t("營業收入", B.rev, Ac.rev, Bc.rev, "rev") + t("營業成本", B.cogs, Ac.cogs, Bc.cogs, "cogs") + t("營業費用", B.opx, Ac.opx, Bc.opx, "opx") +
+      t("稅前淨利", B.pbt, Ac.pbt, Bc.pbt, "res") +
+      `<div class="card kpi"><div class="lab">營收達成率（已結帳月）</div><div class="val">${c && Bc.rev ? pct(Ac.rev / Bc.rev) : "—"}</div><div class="cmp">預算毛利率 ${pct(B.gpm)}｜營業利益率 ${pct(B.opm)}</div></div>`;
+  } else {
+    const t = (lab, v, sub) => `<div class="card kpi"><div class="lab">${lab}</div><div class="val">${v}</div><div class="cmp">${sub}</div></div>`;
+    tiles = t("營業收入", wan(A.rev), periodLabel()) + t("毛利率", pct(A.gpm), "毛利 " + wan(A.gp)) + t("營業費用", wan(A.opx), "占營收 " + pct(A.rev ? A.opx / A.rev : null)) +
+      t("人事費率", pct(A.rev ? A.pers / A.rev : null), "人事成本 " + wan(A.pers)) + t("稅前淨利", `<span class="${A.pbt < 0 ? "neg" : ""}">${wan(A.pbt)}</span>`, "淨利率 " + pct(A.npm));
+  }
+  return `<div class="grid kpis">${tiles}</div>
+  <div class="grid two" style="margin-top:14px">
+    <div class="card"><h3>${S.year === 2027 ? "月別營收：預算 vs 實際" : "月別營收、成本費用與稅前淨利"}</h3><p class="hint">${S.scope}｜單位：萬元${S.year === 2026 && depts ? "｜部門別 1-2 月未分部門" : ""}</p><div class="chartbox"><canvas id="c1"></canvas></div></div>
+    <div class="card"><h3>${S.year === 2027 ? "月別稅前淨利：預算 vs 實際" : "業務線營收與毛利"}</h3><p class="hint">${S.year === 2027 ? "實際為已匯入月份" : periodLabel() + "｜依會計科目歸到業務線"}</p><div class="chartbox"><canvas id="c2"></canvas></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>重點分析與建議</h3><p class="hint">依財務數字自動演算，詳見「財務分析報告」</p>${insHtml(insights().slice(0, 5))}</div>`;
+};
+AFTER.overview = () => {
+  const depts = scopeDepts(), cols = columns();
+  const labels = cols.map(c => c.label);
+  if (S.year === 2027) {
+    const c = closed2027();
+    const b = cols.map(x => totals(budget(depts, x.m))), a = cols.map(x => x.m[0] <= c ? totals(actual(depts, x.m)) : null);
+    mount("c1", chartBase("bar", { labels, datasets: [bar("預算", b.map(t => t.rev), css("--s2")), bar("實際", a.map(t => t ? t.rev : null), css("--s1"))] }));
+    mount("c2", chartBase("bar", { labels, datasets: [bar("預算", b.map(t => t.pbt), css("--s2")), bar("實際", a.map(t => t ? t.pbt : null), css("--s1"))] }));
+    return;
+  }
+  const t = cols.map(x => totals(actual(depts, x.m)));
+  const has = t.map(x => x.rev || x.opx || x.cogs);
+  mount("c1", chartBase("bar", { labels, datasets: [
+    bar("營業收入", t.map((x, i) => has[i] ? x.rev : null), css("--s1")),
+    bar("成本＋費用", t.map((x, i) => has[i] ? x.cogs + x.opx : null), css("--s2")),
+    lineDs("稅前淨利", t.map((x, i) => has[i] ? x.pbt : null), css("--s3"))] }));
+  const A = actual(depts, periodMonths());
+  const L = LINES.map(l => ({ n: l.name, r: l.rev.reduce((s, c) => s + (A[c] || 0), 0), c: l.cost.reduce((s, c) => s + (A[c] || 0), 0) })).filter(x => x.r || x.c);
+  mount("c2", chartBase("bar", { labels: L.map(x => x.n), datasets: [bar("營收", L.map(x => x.r), css("--s1")), bar("毛利", L.map(x => x.r - x.c), css("--s3"))] }));
+};
+
+VIEWS.pl = () => {
+  const depts = scopeDepts(), cols = columns(), months = periodMonths();
+  const is27 = S.year === 2027, c = closed2027();
+  const colData = cols.map(x => is27 ? (x.m[0] <= c ? actual(depts, x.m) : budget(depts, x.m)) : actual(depts, x.m));
+  const P = actual(depts, months), PB = is27 ? budget(depts, months) : null;
+  const bm = months.filter(m => m <= c), Ac = is27 ? actual(depts, bm) : null, Bc = is27 ? budget(depts, bm) : null;
+  const full = is27 ? budget(depts, M12) : null, rest = is27 ? budget(depts, M12.filter(m => m > c)) : null;
+  const TP = totals(P), base = is27 ? totals(PB).rev : TP.rev;
+  const showNote = S.plNote !== false;
+  const noteTh = showNote ? `<th class="l">說明／相關處</th>` : "";
+  const head = `<tr><th class="l">代碼</th><th class="l">會計科目</th>${noteTh}${cols.map((x, i) => `<th title="${esc(x.note || "")}">${x.label}${is27 && x.m[0] > c ? "<br><span class='muted small'>預算</span>" : ""}</th>`).join("")}` +
+    (is27 ? `<th>${periodLabel()}<br>預算</th><th>已結帳月<br>預算</th><th>已結帳月<br>實際</th><th>差異</th><th>達成率</th><th>全年預估</th>` : `<th>${periodLabel()}<br>合計</th><th>占營收</th>`) + `</tr>`;
+  const cells = (getter, sec, bold) => {
+    let h = cols.map((x, i) => { const v = getter(colData[i]); return `<td class="${is27 && x.m[0] > c ? "est" : ""}${v < 0 ? " neg" : ""}">${v ? fmt(v) : "—"}</td>`; }).join("");
+    if (is27) {
+      const b = getter(PB), bc = getter(Bc), ac = getter(Ac), d = ac - bc, f = getter(Ac) + getter(rest);
+      h += `<td>${fmt(b)}</td><td>${c ? fmt(bc) : "—"}</td><td>${c ? fmt(ac) : "—"}</td><td class="${c ? (favorable(sec, d) ? "pos" : "neg") : ""}">${c ? sgn(d) : "—"}</td><td>${c && bc ? pct(ac / bc) : "—"}</td><td>${fmt(f)}</td>`;
+    } else { const v = getter(P); h += `<td${v < 0 ? ' class="neg"' : ""}>${fmt(v)}</td><td>${base ? pct(v / base) : "—"}</td>`; }
+    return h;
+  };
+  let body = "";
+  const tot = (label, key, sec) => { body += `<tr class="tot"><td></td><td class="l">${label}</td>${showNote ? "<td></td>" : ""}${cells(h => totals(h)[key], sec)}</tr>`; };
+  const sec = key => {
+    const list = COA.filter(a => a.sec === key && [P, PB, Ac, full].concat(colData).some(h => h && h[a.code]));
+    body += `<tr class="sec"><td colspan="${cols.length + (is27 ? 8 : 4) + (showNote ? 1 : 0)}">${SEC_NAME[key]}</td></tr>`;
+    list.forEach(a => { body += `<tr><td class="code">${a.code}</td><td class="l" title="${esc(a.desc)}">${a.name}</td>${showNote ? noteCell(a) : ""}${cells(h => (h && h[a.code]) || 0, a.sec)}</tr>`; });
+  };
+  sec("rev"); tot("營業收入淨額", "rev", "rev"); sec("cogs"); tot("營業成本合計", "cogs", "cogs"); tot("營業毛利", "gp", "res");
+  sec("opx"); tot("營業費用合計", "opx", "opx"); tot("營業淨利", "op", "res"); sec("nin"); sec("nex"); tot("稅前淨利", "pbt", "res");
+  // 備註欄：白話用途＋相關處（2026 有入帳或 2027 有預算的處）＋提醒
+  function noteCell(a) {
+    const us = coaUsers(a.code), mine = depts ? depts.filter(x => us.indexOf(x) >= 0) : [];
+    return `<td class="l pl-note"><div>${esc(a.desc)}</div><div class="pl-users">${us.map(x => `<span class="tag${mine.indexOf(x) >= 0 ? " on" : ""}">${x}</span>`).join("") || '<span class="muted">尚無處使用</span>'}</div>${COA_TIPS[a.code] ? `<div class="muted">${esc(COA_TIPS[a.code])}</div>` : ""}</td>`;
+  }
+  return `<div class="card"><h3>損益明細（依財務處會計科目）｜${esc(S.scope)}</h3>
+  <p class="hint">${is27 ? `月份欄：已結帳月顯示實際（黑字），未結帳月顯示預算（灰色斜體）＝滾動預估。差異以「實際－預算」計，綠色有利、紅色不利。全年預估＝已結帳實際＋未來月份預算。` :
+    `排列與財務處綜合損益表相同，可逐科目核對。「說明／相關處」欄列出每個科目的白話用途與會用到它的處（深色＝目前所選範圍），可用右上角的開關隱藏。${depts ? "部門別：1-2 月尚未分部門（各處空白）；3-9 月為各月部門損益表；10 月＝1-10 月累計減 3-9 月，含月報印出後的前期調整（詳見資料管理）。" : "10 月含 1-10 月累計報表的前期調整。"} 6010 薪資支出一律為不含獎金、特休的本薪。`}</p>
+  <div class="row" style="justify-content:flex-end;margin:-4px 0 8px"><label class="small" style="flex-direction:row;display:flex;gap:6px;align-items:center"><input type="checkbox" id="plNote" ${showNote ? "checked" : ""}> 顯示「說明／相關處」欄</label></div>
+  <div class="tablewrap"><table>${head}${body}</table></div></div>` + plChartsHtml();
+};
+
+/* ---------- 損益明細下方：圖表分析模組 ---------- */
+const LINE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
+const NATURE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s7"];
+function plData() {
+  const depts = scopeDepts(), cols = columns(), is27 = S.year === 2027, c = closed2027();
+  const src = cols.map(x => is27 ? (x.m[0] <= c ? actual(depts, x.m) : budget(depts, x.m)) : actual(depts, x.m));
+  const T = src.map(totals);
+  const has = T.map(t => !!(t.rev || t.opx || t.cogs));
+  const idx = cols.map((_, i) => i).filter(i => has[i]);
+  const months = periodMonths();
+  const P = is27 ? budget(depts, months) : actual(depts, months);
+  return { depts, cols, is27, c, src, T, has, idx, P, TP: totals(P), labels: idx.map(i => cols[i].label + (is27 && cols[i].m[0] > c ? "（預算）" : "")) };
+}
+const lineSum = (h, L, k) => L[k].reduce((s, c) => s + (h[c] || 0), 0);
+function plChartsHtml() {
+  const D = plData();
+  if (!D.idx.length) return `<div class="card" style="margin-top:14px"><p class="muted">此範圍沒有可畫圖的數字。</p></div>`;
+  const { T, idx, cols, src, TP, P, is27 } = D;
+  const lab = i => cols[i].label;
+  // 1 營收結構
+  const lineTot = LINES.map(L => ({ n: L.name, v: lineSum(P, L, "rev") })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  const top = lineTot[0];
+  const f = idx[0], l = idx[idx.length - 1];
+  const topShare = i => { const L = LINES.find(x => x.name === top.n); return T[i].rev ? lineSum(src[i], L, "rev") / T[i].rev : null; };
+  const t1 = top ? `最大收入來源是「${top.n}」，占${periodLabel()}營收 ${pct(TP.rev ? top.v / TP.rev : null)}；占比由 ${lab(f)} 的 ${pct(topShare(f))} 變為 ${lab(l)} 的 ${pct(topShare(l))}。` : "";
+  // 2 獲利率
+  const om = idx.filter(i => T[i].rev).map(i => ({ i, g: T[i].gpm, o: T[i].opm }));
+  const best = om.slice().sort((a, b) => b.o - a.o)[0], worst = om.slice().sort((a, b) => a.o - b.o)[0];
+  const avgG = om.length ? om.reduce((s, x) => s + x.g, 0) / om.length : null;
+  const t2 = best ? `平均毛利率 ${pct(avgG)}。營業利益率最好是 ${lab(best.i)}（${pct(best.o)}），最差是 ${lab(worst.i)}（${pct(worst.o)}）；兩者差距主要來自${Math.abs(T[best.i].gpm - T[worst.i].gpm) > 0.1 ? "毛利率變動（定價或直接成本）" : "營收規模不同、固定費用分攤"}。` : "";
+  // 3 費用結構
+  const persShare = TP.opx ? TP["n_人事"] / TP.opx : null;
+  let jump = null;
+  NATURES.forEach(n => idx.forEach((i, k) => { if (!k) return; const p = idx[k - 1]; if (cols[i].m.length !== cols[p].m.length) return; const d = T[i]["n_" + n] - T[p]["n_" + n]; if (!jump || d > jump.d) jump = { n, i, d }; }));
+  const t3 = `人事類占營業費用 ${pct(persShare)}。` + (jump && jump.d > 0 ? `單期增加最多的是「${jump.n}」：${lab(jump.i)} 比前一期多 ${fmt(jump.d)}。` : "");
+  // 4 瀑布
+  const deduct = [["營業成本", TP.cogs]].concat(NATURES.map(n => [n, TP["n_" + n]])).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
+  const t4 = TP.rev ? `營收 ${fmt(TP.rev)} 中，最大的扣減是「${deduct[0][0]}」${fmt(deduct[0][1])}（占營收 ${pct(deduct[0][1] / TP.rev)}），最後剩稅前淨利 ${fmt(TP.pbt)}（${pct(TP.npm)}）。` : `此範圍沒有營收，費用合計 ${fmt(TP.opx + TP.cogs)}。`;
+  // 5 前十大費用
+  const exps = COA.filter(a => (a.sec === "opx" || a.sec === "cogs") && P[a.code] > 0).map(a => ({ a, v: P[a.code] })).sort((x, y) => y.v - x.v);
+  const allExp = TP.opx + TP.cogs, top3 = exps.slice(0, 3).reduce((s, x) => s + x.v, 0);
+  const t5 = exps.length ? `前 3 大科目（${exps.slice(0, 3).map(x => x.a.name).join("、")}）合計占成本＋費用 ${pct(allExp ? top3 / allExp : null)}，是最值得優先檢討的地方。` : "";
+  // 6 兩平 or 累計
+  let t6 = "";
+  if (!is27) {
+    const be = idx.map(i => T[i].gpm > 0 ? (T[i].opx - T[i].non) / T[i].gpm : null);
+    const below = idx.filter((i, k) => be[k] != null && T[i].rev < be[k]);
+    t6 = `${idx.length} 期中有 ${below.length} 期營收低於損益兩平點。` + (below.length ? `缺口最大的是 ${lab(below.map(i => ({ i, g: be[idx.indexOf(i)] - T[i].rev })).sort((a, b) => b.g - a.g)[0].i)}。` : "");
+  } else {
+    const B = cols.map(x => totals(budget(D.depts, x.m)).pbt), A = cols.map(x => x.m[0] <= D.c ? totals(actual(D.depts, x.m)).pbt : null);
+    const cb = B.slice(0, D.c).reduce((s, v) => s + v, 0), ca = A.slice(0, D.c).reduce((s, v) => s + (v || 0), 0);
+    t6 = D.c ? `截至 ${D.c} 月累計稅前淨利：實際 ${fmt(ca)}，預算 ${fmt(cb)}，差異 ${sgn(ca - cb)}。` : "尚未匯入 2027 實際數字，目前只畫出預算累計線。";
+  }
+  const card = (id, title, hint, take, tall) => `<div class="card"><h3>${title}</h3><p class="hint">${hint}</p><div class="chartbox"${tall ? ' style="height:340px"' : ""}><canvas id="${id}"></canvas></div><div class="ins info small" style="margin-top:10px"><b>重點解讀</b>${take}</div></div>`;
+  const note = is27 ? "已結帳月為實際，其餘為預算" : (D.depts ? "部門別月報" : "公司別月報");
+  return `<h3 style="margin:22px 0 10px">圖表分析｜${esc(S.scope)}｜${periodLabel()}</h3><div class="grid two">` +
+    card("pc1", "營收結構（依業務線）", "各期營收由哪些業務線組成｜" + note + "｜單位：萬元", t1) +
+    card("pc2", "毛利率與營業利益率", "各期獲利率走勢｜單位：%", t2) +
+    card("pc3", "營業費用結構（依性質）", "人事、場地、行銷、營運雜支、專業服務、其他｜單位：萬元", t3) +
+    card("pc4", "從營收到稅前淨利", periodLabel() + "｜營收逐項扣除成本與各類費用｜單位：萬元", t4) +
+    card("pc5", "前 10 大成本與費用科目", periodLabel() + "｜依會計科目｜單位：萬元", t5, true) +
+    (is27 ? card("pc6", "累計稅前淨利：預算 vs 實際", "1 月起逐月累計｜單位：萬元", t6) : card("pc6", "營收 vs 損益兩平營收", "損益兩平營收＝（營業費用－營業外淨額）÷ 毛利率｜單位：萬元", t6)) +
+    `</div>`;
+}
+AFTER.pl = () => {
+  const pn = document.getElementById("plNote"); if (pn) pn.onchange = () => { S.plNote = pn.checked; render(); };
+  const D = plData(); if (!D.idx.length) return;
+  const { idx, src, T, cols, P, TP, is27 } = D, labels = D.labels, text2 = css("--text-2"), line = css("--line");
+  const wanTick = v => (v / 10000).toLocaleString() + "萬";
+  const stacked = { scales: { x: { stacked: true, ticks: { color: text2 }, grid: { display: false } }, y: { stacked: true, ticks: { color: text2, callback: wanTick }, grid: { color: line } } } };
+  // 1
+  const LS1 = LINES.map((L, k) => ({ L, k, d: idx.map(i => lineSum(src[i], L, "rev")) })).filter(x => x.d.some(v => v));
+  mount("pc1", chartBase("bar", { labels, datasets: LS1.map(x => bar(x.L.name, x.d, css(LINE_COLORS[x.k]), { stack: "r", maxBarThickness: 34 })) }, stacked));
+  // 2
+  mount("pc2", chartBase("line", { labels, datasets: [lineDs("毛利率", idx.map(i => T[i].rev ? +(T[i].gpm * 100).toFixed(1) : null), css("--s1")), lineDs("營業利益率", idx.map(i => T[i].rev ? +(T[i].opm * 100).toFixed(1) : null), css("--s2"))] },
+    { plugins: { legend: { position: "top", align: "start", labels: { color: text2, boxWidth: 12, boxHeight: 12, usePointStyle: true } }, tooltip: { callbacks: { label: c => " " + c.dataset.label + "：" + c.parsed.y + "%" } } },
+      scales: { x: { ticks: { color: text2 }, grid: { display: false } }, y: { ticks: { color: text2, callback: v => v + "%" }, grid: { color: line } } } }));
+  // 3
+  mount("pc3", chartBase("bar", { labels, datasets: NATURES.map((n, k) => bar(n, idx.map(i => T[i]["n_" + n]), css(NATURE_COLORS[k]), { stack: "e", maxBarThickness: 34 })) }, stacked));
+  // 4 瀑布：浮動長條
+  const steps = [["營業收入", TP.rev, "total"], ["營業成本", -TP.cogs]].concat(NATURES.map(n => [n, -TP["n_" + n]])).concat([["營業外淨額", TP.non]]).filter(s => s[2] || s[1]);
+  let run = 0; const wl = [], wd = [], wc = [];
+  steps.forEach(s => { if (s[2]) { wl.push(s[0]); wd.push([0, s[1]]); run = s[1]; wc.push(css("--s1")); } else { wl.push(s[0]); wd.push([run, run + s[1]]); run += s[1]; wc.push(css(s[1] < 0 ? "--s2" : "--s3")); } });
+  wl.push("稅前淨利"); wd.push([0, run]); wc.push(css(run < 0 ? "--crit" : "--s1"));
+  mount("pc4", chartBase("bar", { labels: wl, datasets: [Object.assign(bar("金額", wd, wc), { borderSkipped: false })] },
+    { plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => " " + fmt(c.raw[1] - c.raw[0]) } } } }));
+  // 5
+  const exps = COA.filter(a => (a.sec === "opx" || a.sec === "cogs") && P[a.code] > 0).map(a => ({ a, v: P[a.code] })).sort((x, y) => y.v - x.v).slice(0, 10);
+  mount("pc5", chartBase("bar", { labels: exps.map(x => x.a.code + " " + x.a.name), datasets: [bar("金額", exps.map(x => x.v), css("--s1"))] },
+    { indexAxis: "y", plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => " " + fmt(c.parsed.x) + "（占成本＋費用 " + pct((TP.opx + TP.cogs) ? c.parsed.x / (TP.opx + TP.cogs) : null) + "）" } } },
+      scales: { x: { ticks: { color: text2, callback: wanTick }, grid: { color: line } }, y: { ticks: { color: text2 }, grid: { display: false } } } }));
+  // 6
+  if (!is27) {
+    mount("pc6", chartBase("bar", { labels, datasets: [bar("營業收入", idx.map(i => T[i].rev), css("--s1")), lineDs("損益兩平營收", idx.map(i => T[i].gpm > 0 ? (T[i].opx - T[i].non) / T[i].gpm : null), css("--s2"))] }));
+  } else {
+    let cb = 0, ca = 0; const B = [], A = [];
+    cols.forEach(x => { cb += totals(budget(D.depts, x.m)).pbt; B.push(cb); if (x.m[0] <= D.c) { ca += totals(actual(D.depts, x.m)).pbt; A.push(ca); } else A.push(null); });
+    mount("pc6", chartBase("line", { labels: cols.map(x => x.label), datasets: [lineDs("預算累計", B, css("--s2")), lineDs("實際累計", A, css("--s1"))] }));
+  }
+};
+
+VIEWS.compare = () => {
+  const months = periodMonths(), is27 = S.year === 2027;
+  const units = ACC_DEPTS.map(d => ({ n: d, depts: [d] })).concat(is27 ? OPS_SUB.map(d => ({ n: "　└ " + d, depts: [d] })) : []).concat(Object.keys(GROUPS).map(g => ({ n: "群組：" + g, depts: GROUPS[g], grp: 1 })));
+  if (S.year === 2026) units.push({ n: "未分部門（1-2月）", depts: ["未分部門"] });
+  units.push({ n: "全公司", depts: null, grp: 1 });
+  const rows = units.map(u => {
+    const A = totals(actual(u.depts, months)), B = is27 ? totals(budget(u.depts, months)) : null;
+    return Object.assign(u, { A, B });
+  });
+  const cols = is27
+    ? ["營收預算", "成本預算", "費用預算", "稅前淨利預算", "預算毛利率", "預算人事費率", "營收實際", "稅前淨利實際", "淨利差異"]
+    : ["營業收入", "營業成本", "營業費用", "稅前淨利", "毛利率", "人事費率", "淨利率", "占全公司營收"];
+  const all = rows[rows.length - 1].A;
+  const cc = t => t.rev <= 0.2 * (t.cogs + t.opx);   // 成本中心（營收不到成本費用的 2 成）不計比率
+  const rt = (t, v) => cc(t) ? "成本中心" : pct(v);
+  const tr = r => {
+    const A = r.A, B = r.B;
+    const v = is27 ? [fmt(B.rev), fmt(B.cogs), fmt(B.opx), fmt(B.pbt), rt(B, B.gpm), rt(B, B.rev ? B.pers / B.rev : null), fmt(A.rev), fmt(A.pbt), closed2027() ? sgn(A.pbt - totals(budget(r.depts, periodMonths().filter(m => m <= closed2027()))).pbt) : "—"]
+      : [fmt(A.rev), fmt(A.cogs), fmt(A.opx), `<span class="${A.pbt < 0 ? "neg" : ""}">${fmt(A.pbt)}</span>`, rt(A, A.gpm), rt(A, A.rev ? A.pers / A.rev : null), rt(A, A.npm), pct(all.rev ? A.rev / all.rev : null)];
+    return `<tr class="${r.grp ? "tot" : ""}"><td class="l">${esc(r.n)}${r.depts && r.grp ? `<br><span class="muted small">${r.depts.join("、")}</span>` : ""}</td>${v.map(x => `<td>${x}</td>`).join("")}</tr>`;
+  };
+  return `<div class="card"><h3>部門與群組比較｜${periodLabel()}</h3>
+  <p class="hint">群組定義可在「資料管理」調整。目前：${Object.keys(GROUPS).map(g => g + "＝" + GROUPS[g].join("＋")).join("；")}。營運處＝預算系統的營運中心（${OPS_SUB.join("、")}）。</p>
+  <div class="tablewrap"><table><tr><th class="l">單位</th>${cols.map(c => `<th>${c}</th>`).join("")}</tr>${rows.map(tr).join("")}</table></div></div>
+  <div class="grid two" style="margin-top:14px">
+    <div class="card"><h3>各處稅前淨利</h3><p class="hint">${is27 ? "預算 vs 實際" : periodLabel()}｜單位：萬元</p><div class="chartbox"><canvas id="c3"></canvas></div></div>
+    <div class="card"><h3>各處費用結構（依性質）</h3><p class="hint">${is27 ? "預算" : "實際"}｜人事含薪資、獎金、勞健保、伙食、福利、退休金</p><div class="chartbox"><canvas id="c4"></canvas></div></div>
+  </div>`;
+};
+AFTER.compare = () => {
+  const months = periodMonths(), is27 = S.year === 2027;
+  const T = ACC_DEPTS.map(d => ({ a: totals(actual([d], months)), b: is27 ? totals(budget([d], months)) : null }));
+  const ds = is27 ? [bar("預算", T.map(x => x.b.pbt), css("--s2")), bar("實際", T.map(x => x.a.pbt), css("--s1"))] : [bar("稅前淨利", T.map(x => x.a.pbt), css("--s1"))];
+  mount("c3", chartBase("bar", { labels: ACC_DEPTS, datasets: ds }, { indexAxis: "y", scales: { x: { ticks: { color: css("--text-2"), callback: v => (v / 10000).toLocaleString() + "萬" }, grid: { color: css("--line") } }, y: { ticks: { color: css("--text-2") }, grid: { display: false } } } }));
+  const src = T.map(x => is27 ? x.b : x.a), cl = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s7"];
+  mount("c4", chartBase("bar", { labels: ACC_DEPTS, datasets: NATURES.map((n, i) => bar(n, src.map(t => t["n_" + n]), css(cl[i]), { stack: "s", maxBarThickness: 40 })) },
+    { scales: { x: { stacked: true, ticks: { color: css("--text-2") }, grid: { display: false } }, y: { stacked: true, ticks: { color: css("--text-2"), callback: v => (v / 10000).toLocaleString() + "萬" }, grid: { color: css("--line") } } } }));
+};
+
+const REPORTS = [
+  ["summary", "經營摘要與改善建議"], ["lines", "業務線毛利分析"], ["cost", "費用結構分析"], ["trend", "趨勢與異常偵測"],
+  ["variance", "預算差異分析（2027）"], ["yoy", "2026 實績 vs 2027 預算"], ["breakeven", "損益兩平與敏感度試算"]
+];
+VIEWS.report = () => {
+  const depts = scopeDepts(), months = periodMonths(), A = actual(depts, months), T = totals(A);
+  let body = "";
+  const r = S.report;
+  if (r === "summary") body = insHtml(insights());
+  if (r === "lines") {
+    const src = S.year === 2027 ? budget(depts, months) : A;
+    const L = LINES.map(l => { const rv = l.rev.reduce((s, c) => s + (src[c] || 0), 0), cs = l.cost.reduce((s, c) => s + (src[c] || 0), 0); return { l, rv, cs, gp: rv - cs, m: rv ? (rv - cs) / rv : null }; }).filter(x => x.rv || x.cs);
+    const tr = totals(src).rev;
+    body = `<p class="hint">${S.year === 2027 ? "2027 預算" : "2026 實績"}｜收入科目與直接成本科目配對成業務線</p><div class="tablewrap"><table><tr><th class="l">業務線</th><th class="l">收入科目</th><th class="l">成本科目</th><th>營收</th><th>直接成本</th><th>毛利</th><th>毛利率</th><th>營收占比</th></tr>` +
+      L.map(x => `<tr><td class="l">${x.l.name}</td><td class="l small">${x.l.rev.join("、")}</td><td class="l small">${x.l.cost.join("、") || "—"}</td><td>${fmt(x.rv)}</td><td>${fmt(x.cs)}</td><td class="${x.gp < 0 ? "neg" : ""}">${fmt(x.gp)}</td><td class="${x.m < 0 ? "neg" : ""}">${pct(x.m)}</td><td>${pct(tr ? x.rv / tr : null)}</td></tr>`).join("") + `</table></div>`;
+  }
+  if (r === "cost") {
+    const src = S.year === 2027 ? budget(depts, months) : A, TT = totals(src);
+    body = `<p class="hint">${S.year === 2027 ? "2027 預算" : "2026 實績"}｜營業費用依性質分類，並列出前 10 大費用科目</p><div class="grid two"><div><table><tr><th class="l">性質</th><th>金額</th><th>占費用</th><th>占營收</th></tr>` +
+      NATURES.map(n => `<tr><td class="l">${n}</td><td>${fmt(TT["n_" + n])}</td><td>${pct(TT.opx ? TT["n_" + n] / TT.opx : null)}</td><td>${pct(TT.rev ? TT["n_" + n] / TT.rev : null)}</td></tr>`).join("") +
+      `<tr class="tot"><td class="l">營業費用合計</td><td>${fmt(TT.opx)}</td><td>100%</td><td>${pct(TT.rev ? TT.opx / TT.rev : null)}</td></tr></table></div><div><table><tr><th class="l">前 10 大費用科目</th><th>金額</th><th>占費用</th></tr>` +
+      COA.filter(a => a.sec === "opx" && src[a.code]).sort((a, b) => src[b.code] - src[a.code]).slice(0, 10).map(a => `<tr><td class="l">${a.code} ${a.name}</td><td>${fmt(src[a.code])}</td><td>${pct(TT.opx ? src[a.code] / TT.opx : null)}</td></tr>`).join("") + `</table></div></div>`;
+  }
+  if (r === "trend") {
+    const cols = columns(), t = cols.map(x => totals(actual(depts, x.m)));
+    body = `<p class="hint">實際數字的逐期變化（2027 為已匯入月份）。環比＝與前一期比較。</p><div class="tablewrap"><table><tr><th class="l">期間</th><th>營收</th><th>環比</th><th>毛利率</th><th>營業費用</th><th>人事費率</th><th>稅前淨利</th></tr>` +
+      cols.map((x, i) => { const a = t[i], p = t[i - 1]; if (!(a.rev || a.opx)) return ""; return `<tr><td class="l">${x.label}</td><td>${fmt(a.rev)}</td><td>${p && p.rev && x.m.length === cols[i - 1].m.length ? pct(a.rev / p.rev - 1) : "—"}</td><td>${pct(a.gpm)}</td><td>${fmt(a.opx)}</td><td>${pct(a.rev ? a.pers / a.rev : null)}</td><td class="${a.pbt < 0 ? "neg" : ""}">${fmt(a.pbt)}</td></tr>`; }).join("") + `</table></div>` +
+      `<h3 style="margin-top:16px">異常偵測</h3>` + (anomalyScan(depts).map(x => `<div class="ins warning"><b>${x.code} ${x.name}｜${x.col}</b><span class="small">${fmt(x.v)}，為平均 ${fmt(x.mean)} 的 ${(x.v / x.mean).toFixed(1)} 倍</span></div>`).join("") || `<p class="muted">沒有超過「平均＋2 個標準差」的費用波動。</p>`);
+  }
+  if (r === "variance") {
+    if (S.year !== 2027) body = `<p class="muted">請把上方「年度」切到 2027。</p>`;
+    else {
+      const c = closed2027(), bm = months.filter(m => m <= c), B = budget(depts, bm), Ac = actual(depts, bm);
+      if (!c) body = `<p class="muted">尚未匯入 2027 實際數字。到「資料管理」匯入後，這裡會列出每個科目的差異、差異率與有利／不利判讀。</p>`;
+      else body = `<p class="hint">期間：${periodLabel()}中已結帳的月份（${bm.join("、")} 月）。依差異金額排序。</p><div class="tablewrap"><table><tr><th class="l">代碼</th><th class="l">科目</th><th>預算</th><th>實際</th><th>差異</th><th>差異率</th><th class="l">判讀</th></tr>` +
+        COA.map(a => ({ a, b: B[a.code] || 0, v: Ac[a.code] || 0 })).filter(x => x.b || x.v).map(x => Object.assign(x, { d: x.v - x.b })).sort((x, y) => Math.abs(y.d) - Math.abs(x.d))
+          .map(x => `<tr><td class="code">${x.a.code}</td><td class="l">${x.a.name}</td><td>${fmt(x.b)}</td><td>${fmt(x.v)}</td><td class="${favorable(x.a.sec, x.d) ? "pos" : "neg"}">${sgn(x.d)}</td><td>${x.b ? pct(x.d / Math.abs(x.b)) : "—"}</td><td class="l">${favorable(x.a.sec, x.d) ? "有利" : "不利"}${Math.abs(x.d) >= Math.max(50000, Math.abs(x.b) * 0.1) ? "（需說明）" : ""}</td></tr>`).join("") + `</table></div>`;
+    }
+  }
+  if (r === "yoy") {
+    const a26 = actual(depts, M12, 2026), b27 = budget(depts, M12), n26 = depts ? 8 : 10;
+    body = `<p class="hint">2026 年化＝2026 實績 ÷ ${n26} 個月 × 12（${depts ? "部門別只有 3-10 月" : "公司別 1-10 月"}）。2027 為 ${S.scen} 預算全年。</p><div class="tablewrap"><table><tr><th class="l">代碼</th><th class="l">科目</th><th>2026 實績</th><th>2026 年化</th><th>2027 預算</th><th>增減</th><th>增減率</th></tr>` +
+      ["rev", "cogs", "opx", "nin", "nex"].map(s => `<tr class="sec"><td colspan="7">${SEC_NAME[s]}</td></tr>` + COA.filter(a => a.sec === s && (a26[a.code] || b27[a.code])).map(a => { const x = a26[a.code] || 0, an = x / n26 * 12, b = b27[a.code] || 0; return `<tr><td class="code">${a.code}</td><td class="l">${a.name}</td><td>${fmt(x)}</td><td>${fmt(an)}</td><td>${fmt(b)}</td><td>${sgn(b - an)}</td><td>${an ? pct(b / an - 1) : "新增"}</td></tr>`; }).join("")).join("") +
+      (() => { const A1 = totals(a26), B1 = totals(b27); return [["營業收入淨額", "rev"], ["稅前淨利", "pbt"]].map(([l, k]) => `<tr class="tot"><td></td><td class="l">${l}</td><td>${fmt(A1[k])}</td><td>${fmt(A1[k] / n26 * 12)}</td><td>${fmt(B1[k])}</td><td>${sgn(B1[k] - A1[k] / n26 * 12)}</td><td></td></tr>`).join(""); })() + `</table></div>`;
+  }
+  if (r === "breakeven") {
+    const src = S.year === 2027 ? totals(budget(depts, months)) : T;
+    body = `<p class="hint">以${S.year === 2027 ? "2027 預算" : "2026 實績"}（${periodLabel()}）為基準，假設營收、直接成本率與營業費用變動，試算稅前淨利。</p>
+      <div class="row"><label>營收變動 %<input type="number" id="beR" value="0" step="1" style="width:90px"></label><label>毛利率變動（百分點）<input type="number" id="beG" value="0" step="0.5" style="width:90px"></label><label>營業費用變動 %<input type="number" id="beO" value="0" step="1" style="width:90px"></label></div>
+      <div id="beOut" data-rev="${src.rev}" data-gpm="${src.gpm || 0}" data-opx="${src.opx}" data-non="${src.non}"></div>`;
+  }
+  return `<div class="card"><div class="row"><label>報告類型<select id="rSel">${REPORTS.map(x => `<option value="${x[0]}" ${x[0] === r ? "selected" : ""}>${x[1]}</option>`).join("")}</select></label>
+    <span class="muted small">範圍：${esc(S.scope)}｜期間：${periodLabel()}｜${S.year === 2027 ? "情境 " + S.scen : "2026 實績"}</span>
+    </div>${body}</div>`;
+};
+AFTER.report = () => {
+  const out = document.getElementById("beOut"); if (!out) return;
+  const calc = () => {
+    const rev0 = +out.dataset.rev, g0 = +out.dataset.gpm, opx0 = +out.dataset.opx, non = +out.dataset.non;
+    const rev = rev0 * (1 + (+beR.value || 0) / 100), g = g0 + (+beG.value || 0) / 100, opx = opx0 * (1 + (+beO.value || 0) / 100);
+    const p0 = rev0 * g0 - opx0 + non, p = rev * g - opx + non, be = g > 0 ? (opx - non) / g : null;
+    out.innerHTML = `<table style="max-width:640px"><tr><th class="l">項目</th><th>基準</th><th>試算</th></tr>
+      <tr><td class="l">營業收入</td><td>${fmt(rev0)}</td><td>${fmt(rev)}</td></tr><tr><td class="l">毛利率</td><td>${pct(g0)}</td><td>${pct(g)}</td></tr>
+      <tr><td class="l">營業費用</td><td>${fmt(opx0)}</td><td>${fmt(opx)}</td></tr><tr class="tot"><td class="l">稅前淨利</td><td class="${p0 < 0 ? "neg" : ""}">${fmt(p0)}</td><td class="${p < 0 ? "neg" : "pos"}">${fmt(p)}</td></tr>
+      <tr><td class="l">損益兩平營收</td><td colspan="2">${be ? fmt(be) + "（需較試算營收" + (be > rev ? "增加 " + pct(be / rev - 1) : "已超過 " + pct(1 - be / rev)) + "）" : "毛利率 ≤ 0，無法兩平"}</td></tr></table>`;
+  };
+  ["beR", "beG", "beO"].forEach(id => document.getElementById(id).addEventListener("input", calc)); calc();
+};
+
+/* ---------- 科目對照說明：依處別的科目卡 ---------- */
+const COA_DEPTS = ["短租處", "房管處", "業務處", "工程處", "營運處", "公關處"];
+const COA_GROUPS = [
+  { t: "錢從哪裡來：營業收入", s: "本處帶進公司的收入", f: a => a.sec === "rev", c: "--s1", base: "rev" },
+  { t: "直接成本：做這門生意要付的錢", s: "跟收入直接配對的成本，收入扣掉它就是毛利", f: a => a.sec === "cogs", c: "--s2", base: "cost" },
+  { t: "人事成本", s: "薪資、獎金、勞健保、伙食、福利、退休金：人數一變就會變", f: a => a.sec === "opx" && a.nature === "人事", c: "--s3", base: "cost" },
+  { t: "場地", s: "辦公室租金、修繕、水電、清潔", f: a => a.sec === "opx" && a.nature === "場地", c: "--s4", base: "cost" },
+  { t: "行銷", s: "廣告、交際", f: a => a.sec === "opx" && a.nature === "行銷", c: "--s5", base: "cost" },
+  { t: "營運雜支", s: "文具、運費、郵電、手續費、交通、雜項購置", f: a => a.sec === "opx" && a.nature === "營運雜支", c: "--s7", base: "cost" },
+  { t: "專業服務", s: "外包勞務、顧問與系統服務", f: a => a.sec === "opx" && a.nature === "專業服務", c: "--s6", base: "cost" },
+  { t: "其他費用", s: "無法歸類、捐贈、折舊", f: a => a.sec === "opx" && a.nature === "其他", c: "--s8", base: "cost" },
+  { t: "營業外收支", s: "利息、匯兌等與本業無關的收支", f: a => a.sec === "nin" || a.sec === "nex", c: "--muted", base: "cost" }
+];
+const COA_TIPS = {
+  "4120": "退款、折讓用負數表示，會直接減少營收。",
+  "4101-01": "包租的租金收入；對應成本是 5990-01（付房東租金）與 5990-011（水電網路等）。",
+  "4101-02": "代管服務費主科目；房客、房東、修繕、系統服務費另有 021～024 細項。",
+  "4101-03": "仲介服務費；對應成本是 5990-03（刊登費）與 5990-031（高專勞務）。",
+  "4101-031": "社宅服務管理費記在這裡。",
+  "4101-04": "各處的雜項收入都可能進這裡，金額變大時請會計確認是否該改列明確科目。",
+  "4101-06": "租給法人的全額租金；對應成本是 5990-06（付法人房東租金）。",
+  "4101-07": "合作房源的管理費、服務費；對應成本是 5990-07、5990-071。",
+  "5990-011": "包租房源的水電、網路、管理費、清潔、備品，都屬於這個科目。",
+  "5990-031": "高專業務的勞務成本，會跟成交件數一起變動。",
+  "5990-05": "工程材料與工資；若成本已入帳、收入還沒認列，該月毛利會變成負的。",
+  "6010": "這裡只有本薪；獎金在 6010-01，未休特休折現在 6010-02。",
+  "6010-01": "績效、業績與年終獎金。",
+  "6100": "大部分是勞健保公司負擔，約為薪資的 10%，人數一變就會跟著變；少部分是商業保險。",
+  "6180": "按人頭發放的員工伙食津貼，不是聚餐費。",
+  "6190": "員工活動、旅遊、體檢、節慶禮品。",
+  "6230": "無法歸類的雜項。金額大時請會計拆到明確科目，才看得出錢花在哪。",
+  "6270": "短租處多為訂房平台與刷卡手續費，提高官網直訂可降低。",
+  "6020": "辦公室租金，大多記在營運處。",
+  "658000": "勞退 6% 提撥，跟著薪資變動。",
+  "6460": "會計師、律師、顧問與系統訂閱服務（說明書科目，115 年尚未使用）。"
+};
+// 會用到這個科目的處：2026 有入帳，或 2027 預算有編（預算子處併入營運處，公關處另列）
+function coaUsers(code) {
+  coaUsers.c = coaUsers.c || {};
+  if (!coaUsers.c[code]) {
+    const s = {};
+    ACC_DEPTS.forEach(d => { if (actual([d], M12, 2026)[code]) s[d] = 1; });
+    Object.keys(BUD).forEach(sc => Object.keys(BUD[sc]).forEach(bd => { const a = BUD[sc][bd][code]; if (a && a.some(v => v)) s[bd === "公關處" ? "公關處" : budDeptOf(bd)] = 1; }));
+    coaUsers.c[code] = COA_DEPTS.filter(d => s[d]);
+  }
+  return coaUsers.c[code];
+}
+function coaItemsFor(code, d) {
+  const ok = d === "營運處" ? ["營運處"].concat(OPS_SUB) : [d];
+  return (BUDITEMS[code] || []).filter(s => {
+    const m = s.match(/（([^（）]*)）$/); if (!m) return true;
+    const ds = m[1].split("、"); return ds.indexOf("全部門") >= 0 || ds.some(x => ok.indexOf(x) >= 0);
+  }).map(s => s.replace(/（[^（）]*）$/, ""));
+}
+function coaTable() {
+  const a26 = actual(null, M12, 2026), b27 = budget(null, M12);
+  const used = {}; ACC_DEPTS.forEach(d => { const h = actual([d], M12, 2026); Object.keys(h).forEach(c => { if (h[c]) (used[c] = used[c] || []).push(d); }); });
+  return `<div class="tablewrap"><table id="coaT"><tr><th class="l">代碼</th><th class="l">會計科目</th><th class="l">類別／性質</th><th class="l">白話用途</th><th class="l">2026 使用的處</th><th>2026 實績（1-10月）</th><th>2027 預算（${S.scen}）</th><th class="l">對應預算明細品項</th></tr>` +
+    COA.map(a => `<tr data-q="${esc((a.code + a.name + a.desc + (BUDITEMS[a.code] || []).join("")).toLowerCase())}"><td class="code">${a.code}</td><td class="l">${a.name}</td><td class="l">${SEC_NAME[a.sec].replace("（推銷費用）", "")}／${a.nature}</td><td class="l wrap">${esc(a.desc)}</td><td class="l wrap">${(used[a.code] || []).join("、") || '<span class="muted">—</span>'}</td><td>${fmt(a26[a.code] || 0)}</td><td>${fmt(b27[a.code] || 0)}</td><td class="l wrap small">${(BUDITEMS[a.code] || []).map(esc).join("<br>") || '<span class="muted">—</span>'}</td></tr>`).join("") + `</table></div>`;
+}
+VIEWS.coa = () => {
+  const lim = isLimited();
+  const d = lim ? role().dept : (S.coaDept || "短租處");
+  const chips = lim ? "" : `<div class="chips" role="tablist">${COA_DEPTS.concat(["全部科目表"]).map(x => `<button class="chip ${x === d ? "on" : ""}" data-coad="${x}" role="tab" aria-selected="${x === d}">${x}</button>`).join("")}</div>`;
+  const search = `<input type="text" id="coaQ" placeholder="搜尋：代碼、科目、用途或預算品項，例如 6100、伙食、Ragic" style="width:100%;max-width:380px">`;
+  if (d === "全部科目表") return `<div class="card"><h3>科目對照說明</h3><p class="hint">全公司所有會計科目，含 2026 使用的處與對應的預算品項。</p>${chips}<div class="row" style="margin-top:12px">${search}</div>${coaTable()}</div>`;
+  const A = actual([d], M12, 2026), B = budget([d], M12, S.scen), TA = totals(A), TB = totals(B);
+  const no26 = !(TA.rev || TA.opx || TA.cogs);
+  const showAll = !!S.coaAll;
+  const costBase = TA.cogs + TA.opx, costBaseB = TB.cogs + TB.opx;
+  // 業務線配對
+  const pairs = LINES.filter(L => L.cost.length).map(L => {
+    const r = lineSum(A, L, "rev"), c = lineSum(A, L, "cost"), rb = lineSum(B, L, "rev"), cb = lineSum(B, L, "cost");
+    return { L, r, c, rb, cb };
+  }).filter(x => x.r || x.c || x.rb || x.cb);
+  const pairHtml = pairs.length ? `<div class="card" style="margin-top:14px"><h3>收入與成本怎麼配對</h3><p class="hint">同一門生意的收入科目扣掉它的直接成本科目，就是這門生意的毛利。</p><div class="pairs">` +
+    pairs.map(x => { const m = x.r ? (x.r - x.c) / x.r : null, mb = x.rb ? (x.rb - x.cb) / x.rb : null; return `<div class="pair"><div class="pair-h">${x.L.name}</div>
+      <div class="small muted">收入 ${x.L.rev.join("、")}　－　成本 ${x.L.cost.join("、")}</div>
+      <div class="pair-n"><span>2026 毛利 <b class="${x.r - x.c < 0 ? "neg" : ""}">${fmt(x.r - x.c)}</b>（${pct(m)}）</span><span>2027 預算毛利 <b>${fmt(x.rb - x.cb)}</b>（${pct(mb)}）</span></div></div>`; }).join("") + `</div></div>` : "";
+  const groups = COA_GROUPS.map(g => {
+    const list = COA.filter(a => g.f(a) && (showAll || A[a.code] || B[a.code]));
+    if (!list.length) return "";
+    const base26 = g.base === "rev" ? TA.rev : costBase, base27 = g.base === "rev" ? TB.rev : costBaseB;
+    const sum26 = list.reduce((s, a) => s + (A[a.code] || 0), 0), sum27 = list.reduce((s, a) => s + (B[a.code] || 0), 0);
+    return `<section class="cgroup" style="--gc:var(${g.c})"><div class="cgroup-h"><div><h3>${g.t}</h3><p class="hint" style="margin:0">${g.s}</p></div>
+      <div class="cgroup-t small"><span>2026 實績 <b>${fmt(sum26)}</b></span><span>2027 預算 <b>${fmt(sum27)}</b></span></div></div>` +
+      list.map(a => {
+        const v = A[a.code] || 0, b = B[a.code] || 0, sh = base26 ? Math.abs(v) / base26 : 0, items = coaItemsFor(a.code, d);
+        const q = (a.code + a.name + a.desc + (COA_TIPS[a.code] || "") + items.join("")).toLowerCase();
+        return `<div class="acc" data-q="${esc(q)}">
+          <div class="acc-code">${a.code}</div>
+          <div class="acc-main"><div class="acc-name">${a.name}${a.code === "6460" || a.code === "6120" || a.code === "6160" || a.code === "6250" ? ' <span class="tag">說明書科目</span>' : ""}</div>
+            <div class="small">${esc(a.desc)}</div>${COA_TIPS[a.code] ? `<div class="acc-tip small">${esc(COA_TIPS[a.code])}</div>` : ""}</div>
+          <div class="acc-num"><div class="small muted">2026 實績（1-10月）</div><div class="acc-v ${v < 0 ? "neg" : ""}">${v ? fmt(v) : "—"}</div>
+            <div class="meter" title="占本處${g.base === "rev" ? "營收" : "成本＋費用"} ${pct(sh)}"><i style="width:${Math.min(100, sh * 100).toFixed(1)}%"></i></div>
+            <div class="small muted">占本處${g.base === "rev" ? "營收" : "成本費用"} ${base26 ? pct(sh) : "—"}</div></div>
+          <div class="acc-num"><div class="small muted">2027 預算（${S.scen}）</div><div class="acc-v">${b ? fmt(b) : "—"}</div>
+            <div class="small muted">${v && b && !no26 ? "較 2026 年化 " + pct(b / (v / 8 * 12) - 1) : (b && !v ? "2027 新增" : "")}</div></div>
+          <div class="acc-items">${items.length ? `<div class="small muted">對應預算品項</div>` + items.map(x => `<span class="tag">${esc(x)}</span>`).join("") : '<span class="small muted">預算系統沒有對應品項</span>'}</div>
+        </div>`;
+      }).join("") + `</section>`;
+  }).join("");
+  const used = COA.filter(a => A[a.code] || B[a.code]);
+  const cnt = k => used.filter(a => k === "rev" ? a.sec === "rev" : k === "cogs" ? a.sec === "cogs" : a.sec !== "rev" && a.sec !== "cogs").length;
+  return `<div class="card"><h3>${esc(d)}的會計科目</h3>
+    <p class="hint">${lim ? "這裡只列你這一處用到的科目。" : "選一個處，只看該處用到的科目。"}依「收入 → 直接成本 → 各類費用」排列，每個科目附白話用途、注意事項、2026 實績占比、2027 預算與預算系統裡的對應品項。</p>
+    ${chips}
+    <div class="coa-sum">
+      <div><div class="small muted">本處用到的科目</div><div class="kv">${used.length} 個</div><div class="small muted">收入 ${cnt("rev")}｜直接成本 ${cnt("cogs")}｜費用 ${cnt("opx")}</div></div>
+      <div><div class="small muted">2026 營收（1-10月）</div><div class="kv">${wan(TA.rev)}</div><div class="small muted">毛利率 ${pct(TA.gpm)}</div></div>
+      <div><div class="small muted">2026 成本＋費用</div><div class="kv">${wan(costBase)}</div><div class="small muted">人事占 ${pct(costBase ? TA.pers / costBase : null)}</div></div>
+      <div><div class="small muted">2026 稅前淨利</div><div class="kv ${TA.pbt < 0 ? "neg" : ""}">${wan(TA.pbt)}</div><div class="small muted">2027 預算 ${wan(TB.pbt)}</div></div>
+    </div>
+    ${no26 ? `<div class="ins info small"><b>2026 沒有本處的實績</b>${d === "公關處" ? "公關處的費用在會計帳記在營運處，2026 只能看營運處；這裡只顯示 2027 預算。" : "此處 2026 年沒有入帳數字。"}</div>` : ""}
+    <div class="row" style="margin-top:12px">${search}<label class="small" style="flex-direction:row;display:flex;gap:6px;align-items:center"><input type="checkbox" id="coaAll" ${showAll ? "checked" : ""}> 也顯示本處沒用到的科目</label></div>
+  </div>${pairHtml}<div class="cgroups">${groups}</div>`;
+};
+AFTER.coa = () => {
+  main.querySelectorAll("[data-coad]").forEach(b => b.onclick = () => { S.coaDept = b.dataset.coad; render(); });
+  const all = document.getElementById("coaAll"); if (all) all.onchange = () => { S.coaAll = all.checked; render(); };
+  coaQ.addEventListener("input", () => {
+    const q = coaQ.value.trim().toLowerCase();
+    main.querySelectorAll("[data-q]").forEach(el => { el.style.display = !q || el.dataset.q.indexOf(q) >= 0 ? "" : "none"; });
+    main.querySelectorAll(".cgroup").forEach(sec => { sec.style.display = [...sec.querySelectorAll(".acc")].some(x => x.style.display !== "none") ? "" : "none"; });
+  });
+};
+
+VIEWS.notes = () => {
+  const y = S.year, list = isLimited() ? [role().dept] : ACC_DEPTS.concat(["公關處"]);
+  const canEdit = d => isLimited() ? d === role().dept : role().id === "fin";
+  const canReply = !isLimited();
+  return `<div class="card"><h3>季度改善建議方針｜${y} 年</h3><p class="hint">處長每季檢視自己處的數字後填寫改善方向；執行長、營運長可在同一處回覆。內容存在本機瀏覽器，請定期用「資料管理 › 匯出全部資料」備份或交給財務彙整。</p></div>` +
+    list.map(d => {
+      const T = q => totals(actual([d], [q * 3 - 2, q * 3 - 1, q * 3]));
+      return `<div class="card" style="margin-top:12px"><h3>${d}</h3><div class="grid two">` + [1, 2, 3, 4].map(q => {
+        const k = y + "|Q" + q + "|" + d, n = NOTES[k] || {}, t = T(q);
+        return `<div><div class="small muted">第 ${q} 季｜營收 ${fmt(t.rev)}｜稅前淨利 <span class="${t.pbt < 0 ? "neg" : ""}">${fmt(t.pbt)}</span></div>
+          <textarea data-note="${esc(k)}" ${canEdit(d) ? "" : "readonly"} placeholder="${canEdit(d) ? "本季檢討：差異原因、改善措施、負責人與完成時間" : "（處長尚未填寫）"}">${esc(n.text || "")}</textarea>
+          <div class="small muted">${n.at ? "最後更新：" + esc(n.by) + "，" + esc(n.at) : ""}</div>
+          ${canReply ? `<textarea data-reply="${esc(k)}" style="min-height:60px;margin-top:6px" placeholder="主管回覆">${esc(n.reply || "")}</textarea>` : (n.reply ? `<div class="ins info small"><b>主管回覆（${esc(n.replyBy || "")}）</b>${esc(n.reply)}</div>` : "")}</div>`;
+      }).join("") + `</div></div>`;
+    }).join("");
+};
+AFTER.notes = () => {
+  main.querySelectorAll("textarea[data-note]:not([readonly])").forEach(t => t.addEventListener("change", () => saveNote(t.dataset.note, { text: t.value, by: role().name, byId: ME, at: new Date().toLocaleString("zh-TW") })));
+  main.querySelectorAll("textarea[data-reply]").forEach(t => t.addEventListener("change", () => saveNote(t.dataset.reply, { reply: t.value, replyBy: role().name, replyById: ME })));
+};
+
+VIEWS.data = () => {
+  if (!canManage()) return `<div class="card"><p class="muted">資料管理需要儀表板的「編輯者」權限。</p></div>`;
+  const c = closed2027();
+  return `<div class="grid two">
+  <div class="card"><h3>匯入 2027 實際數字（會計月報）</h3><p class="hint">CSV 欄位：<b>月份, 部門, 會計科目代碼, 金額</b>（可多一欄「年度」）。部門用會計的五處：${ACC_DEPTS.join("、")}；若會計有細分營運中心，也可填 ${OPS_SUB.join("、")}。同一處、同一月份會整批覆蓋。收入、成本、費用都填正數；銷貨折讓 4120 填負數。</p>
+    <div class="row"><button id="tplBtn">下載匯入範本</button><input type="file" id="actFile" accept=".csv"></div><div id="actMsg" class="small"></div>
+    <p class="small muted">目前已匯入：${c ? "1-" + c + " 月，共 " + Object.keys(ACT2027).length + " 個處" : "尚無"}　<button id="actClear">清除 2027 實際數字</button></p></div>
+  <div class="card"><h3>手動輸入 2027 實際數字</h3><p class="hint">選擇處與月份後，逐科目輸入。</p>
+    <div class="row"><label>處<select id="mDept">${ALL_UNITS.map(d => `<option>${d}</option>`).join("")}</select></label><label>月份<select id="mMon">${M12.map(m => `<option value="${m}">${m} 月</option>`).join("")}</select></label><button id="mOpen" class="primary">開啟輸入表</button></div><div id="mBox"></div></div>
+  <div class="card"><h3>更新 2027 預算</h3><p class="hint">預算系統（會計科目對照版）按「匯出 CSV」後，把產生的「…-會計科目版.csv」匯入這裡；系統依檔內「情境」欄更新 110M 或 120M。</p>
+    <div class="row"><input type="file" id="budFile" accept=".csv"><button id="budReset">還原內建預算（2026/10/21 備份）</button></div><div id="budMsg" class="small"></div></div>
+  ${ONLINE && ADMIN ? `<div class="card"><h3>角色指派</h3><p class="hint">搜尋公司成員並指定角色。處長只會看到自己的處；執行長、營運長看全部。對方也需要在分享選單被加入此頁面（建議設為「參與者」，才能填寫季度建議）。</p><input type="text" id="rq" placeholder="輸入姓名或 email 搜尋" style="width:100%;max-width:320px"><div id="rHits"></div><h3 style="margin-top:12px">已指派</h3><div id="rList"></div></div>` : ""}
+  <div class="card"><h3>群組設定</h3><p class="hint">勾選每個群組包含的處。</p>
+    <div class="tablewrap"><table><tr><th class="l">群組</th>${ALL_UNITS.map(d => `<th>${d}</th>`).join("")}</tr>${Object.keys(GROUPS).map(g => `<tr><td class="l">${g}</td>${ALL_UNITS.map(d => `<td><input type="checkbox" data-g="${g}" data-d="${d}" ${GROUPS[g].indexOf(d) >= 0 ? "checked" : ""}></td>`).join("")}</tr>`).join("")}</table></div>
+    <p class="small muted">管理、資訊、財務、投資、公關五處在會計帳屬於「營運處」：勾「營運處」即包含五處；單獨勾子處時，2026 實績沒有子處資料，只看得到 2027 預算（與匯入時標註子處的實際數字）。</p>
+    <div class="row" style="margin-top:8px"><button id="grpReset">恢復預設</button></div></div>
+  <div class="card"><h3>備份與還原</h3><p class="hint">一次匯出／匯入：2027 實際數字、更新過的預算、季度建議、群組設定。</p>
+    <div class="row"><button id="expAll">匯出全部資料（JSON）</button><input type="file" id="impAll" accept=".json"></div></div>
+  <div class="card"><h3>資料說明</h3><ul class="small">
+    ${window.DATA_NOTES_HTML || ""}
+  </ul></div></div>`;
+};
+function parseCsv(text) {
+  return text.replace(/^﻿/, "").split(/\r?\n/).filter(l => l.trim()).map(l => { const o = []; let cur = "", q = false;
+    for (let i = 0; i < l.length; i++) { const ch = l[i]; if (q) { if (ch === '"') { if (l[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; } else if (ch === '"') q = true; else if (ch === ",") { o.push(cur); cur = ""; } else cur += ch; }
+    o.push(cur); return o.map(x => x.trim()); });
+}
+const readFile = (input, cb) => { const f = input.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => cb(String(r.result), f.name); r.readAsText(f, "utf-8"); input.value = ""; };
+AFTER.data = () => {
+  if (!canManage()) return;
+  tplBtn.onclick = () => download("2027實際數字匯入範本.csv", "﻿年度,月份,部門,會計科目代碼,金額\n2027,1,短租處,4101-01,0\n2027,1,短租處,5990-01,0\n2027,1,營運處,6020,0\n", "text/csv;charset=utf-8");
+  actFile.onchange = () => readFile(actFile, async text => {
+    const rows = parseCsv(text), h = rows[0], ix = k => h.findIndex(x => x.indexOf(k) >= 0);
+    const I = { m: ix("月"), d: ix("部門"), c: ix("代碼"), v: ix("金額"), y: ix("年度") };
+    if (I.m < 0 || I.d < 0 || I.c < 0 || I.v < 0) { flash("欄位不符，請使用匯入範本（月份, 部門, 會計科目代碼, 金額）。"); return; }
+    const bad = [], seen = {}, next = JSON.parse(JSON.stringify(ACT2027)); let ok = 0;
+    rows.slice(1).forEach((r, i) => {
+      const m = +r[I.m], d = r[I.d], c = r[I.c], v = +String(r[I.v]).replace(/[,\s]/g, "").replace(/^\((.*)\)$/, "-$1");
+      if (I.y >= 0 && r[I.y] && +r[I.y] !== 2027 && +r[I.y] !== 116) return;
+      if (!(m >= 1 && m <= 12) || ALL_UNITS.indexOf(d) < 0 || !COA_BY[c] || isNaN(v)) { bad.push(i + 2); return; }
+      const k = d + "|" + m; if (!seen[k]) { seen[k] = 1; Object.keys(next[d] || {}).forEach(cc => { next[d][cc][m - 1] = 0; }); }
+      next[d] = next[d] || {}; next[d][c] = next[d][c] || Array(12).fill(0); next[d][c][m - 1] += v; ok++;
+    });
+    if (!ok) { flash("沒有可匯入的資料列。" + (bad.length ? `略過 ${bad.length} 列（月份、部門或會計科目代碼不正確）。` : "")); return; }
+    if (await persist("act2027", next)) {
+      ACT2027 = next;
+      flash(`已匯入 ${ok} 筆（${Object.keys(seen).length} 個處×月）。` + (bad.length ? `\n略過 ${bad.length} 列（第 ${bad.slice(0, 10).join("、")}${bad.length > 10 ? "…" : ""} 列：月份、部門或會計科目代碼不正確）。` : ""));
+      render();
+    }
+  });
+  confirmBtn(actClear, actClear.textContent, async () => { if (await persist("act2027", {})) { ACT2027 = {}; flash("已清除 2027 實際數字。"); render(); } });
+  mOpen.onclick = () => {
+    const d = mDept.value, m = +mMon.value, h = ACT2027[d] || {}, bm = budget([d], [m]);
+    mBox.innerHTML = `<div class="tablewrap" style="max-height:380px;overflow:auto"><table><tr><th class="l">代碼</th><th class="l">科目</th><th>${m} 月預算</th><th>實際</th></tr>` +
+      COA.map(a => `<tr><td class="code">${a.code}</td><td class="l">${a.name}</td><td>${fmt(bm[a.code] || 0)}</td><td><input type="number" id="mc-${a.code}" data-mc="${a.code}" value="${(h[a.code] || [])[m - 1] || ""}" style="width:120px"></td></tr>`).join("") +
+      `</table></div><div class="row" style="margin-top:8px"><button id="mSave" class="primary">儲存 ${d} ${m} 月</button></div>`;
+    mSave.onclick = async () => {
+      const next = JSON.parse(JSON.stringify(ACT2027)); next[d] = next[d] || {};
+      mBox.querySelectorAll("input[data-mc]").forEach(inp => { const c = inp.dataset.mc, v = +inp.value || 0; if (!next[d][c]) { if (!v) return; next[d][c] = Array(12).fill(0); } next[d][c][m - 1] = v; });
+      if (await persist("act2027", next)) { ACT2027 = next; flash(`已儲存 ${d} ${m} 月實際數字。`); render(); }
+    };
+  };
+  budFile.onchange = () => readFile(budFile, async text => {
+    const rows = parseCsv(text), h = rows[0], ix = k => h.indexOf(k);
+    const I = { s: ix("情境"), d: ix("部門"), c: ix("會計科目代碼"), m1: ix("1月") };
+    if (I.s < 0 || I.d < 0 || I.c < 0 || I.m1 < 0) { flash("格式不符：請用預算系統（會計科目對照版）匯出的 CSV。"); return; }
+    const nb = {}; let skip = 0;
+    rows.slice(1).forEach(r => { const s = r[I.s], d = r[I.d], c = r[I.c]; if (!COA_BY[c]) { skip++; return; }
+      nb[s] = nb[s] || {}; nb[s][d] = nb[s][d] || {}; nb[s][d][c] = nb[s][d][c] || Array(12).fill(0);
+      for (let k = 0; k < 12; k++) nb[s][d][c][k] += +String(r[I.m1 + k]).replace(/,/g, "") || 0; });
+    const merged = Object.assign({}, BUD, nb);
+    if (await persist("bud", merged)) { BUD = merged; flash("已更新預算情境：" + Object.keys(nb).join("、") + (skip ? `\n有 ${skip} 列沒有有效會計科目代碼，未計入（請回預算系統「科目維護」補上）。` : "")); render(); }
+  });
+  confirmBtn(budReset, budReset.textContent, async () => { if (await persist("bud", null)) { BUD = BUD2027; flash("已還原內建預算。"); render(); } });
+  main.querySelectorAll("input[data-g]").forEach(cb => cb.onchange = async () => {
+    const g = cb.dataset.g, d = cb.dataset.d, next = JSON.parse(JSON.stringify(GROUPS));
+    next[g] = ALL_UNITS.filter(x => x === d ? cb.checked : next[g].indexOf(x) >= 0);
+    if (await persist("groups", next)) { GROUPS = next; render(); } else cb.checked = !cb.checked;
+  });
+  grpReset.onclick = async () => { const next = JSON.parse(JSON.stringify(DEFAULT_GROUPS)); if (await persist("groups", next)) { GROUPS = next; render(); } };
+  expAll.onclick = () => download("全居儀表板資料備份-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify({ v: 1, act2027: ACT2027, bud: BUD === BUD2027 ? null : BUD, notes: NOTES, groups: GROUPS }, null, 1), "application/json");
+  impAll.onchange = () => readFile(impAll, async text => {
+    let d; try { d = JSON.parse(text); if (d.v !== 1) throw 0; } catch (e) { flash("檔案格式不符：請選擇本儀表板匯出的 JSON 備份。"); return; }
+    await persist("act2027", d.act2027 || {}); await persist("bud", d.bud || null); await persist("groups", d.groups || GROUPS);
+    for (const k of Object.keys(d.notes || {})) await saveNote(k, d.notes[k]);
+    ACT2027 = d.act2027 || {}; BUD = d.bud || BUD2027; GROUPS = d.groups || GROUPS; flash("已還原備份。"); render();
+  });
+  // 角色指派（線上、編輯者）
+  if (ONLINE && ADMIN && document.getElementById("rq")) {
+    const draw = async () => {
+      const ids = Object.keys(ROLEMAP), ps = ids.length && USR ? await USR.profiles(ids) : {};
+      rList.innerHTML = ids.length ? `<table><tr><th class="l">人員</th><th class="l">角色</th><th></th></tr>` + ids.map(id => `<tr><td class="l" data-name="${esc(id)}"></td><td class="l"><select data-rid="${esc(id)}">${ROLES.map(r => `<option value="${r.id}" ${ROLEMAP[id] === r.id ? "selected" : ""}>${r.name}</option>`).join("")}</select></td><td><button data-rdel="${esc(id)}">移除</button></td></tr>`).join("") + `</table>` : `<p class="muted small">尚未指派任何人。沒被指派的人打開頁面時，只會看到「尚未指派角色」。</p>`;
+      rList.querySelectorAll("[data-name]").forEach(td => { td.textContent = (ps[td.dataset.name] || {}).name || "（無法顯示姓名的成員）"; });
+      rList.querySelectorAll("select[data-rid]").forEach(s => s.onchange = () => setRole(s.dataset.rid, s.value));
+      rList.querySelectorAll("[data-rdel]").forEach(b => b.onclick = () => setRole(b.dataset.rdel, null));
+    };
+    const setRole = async (id, rid) => { const next = Object.assign({}, ROLEMAP); if (rid) next[id] = rid; else delete next[id]; if (await persist("roles", next)) { ROLEMAP = next; draw(); } };
+    const search = async q => {
+      const hits = USR ? await USR.search(q) : [];
+      rHits.innerHTML = "";
+      hits.forEach(h => {
+        const row = document.createElement("div"); row.className = "row"; row.style.margin = "4px 0";
+        const nm = document.createElement("span"); nm.textContent = h.name; nm.style.minWidth = "140px";
+        const sel = document.createElement("select"); sel.id = "rs-" + h.id; sel.innerHTML = ROLES.map(r => `<option value="${r.id}">${r.name}</option>`).join("");
+        if (ROLEMAP[h.id]) sel.value = ROLEMAP[h.id];
+        const btn = document.createElement("button"); btn.textContent = ROLEMAP[h.id] ? "更新角色" : "指派"; btn.className = "primary";
+        btn.onclick = () => setRole(h.id, sel.value);
+        row.append(nm, sel, btn); rHits.append(row);
+      });
+      if (!hits.length && q) rHits.innerHTML = `<p class="muted small">找不到符合的成員。</p>`;
+    };
+    rq.addEventListener("focus", () => search(rq.value));
+    rq.addEventListener("input", () => search(rq.value));
+    draw();
+  }
+};
+
+render();
+initOnline();
+</script>
+<script>
+(async () => {
+  const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const keyFrom = async pw => {
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64(ENC.salt), iterations: ENC.iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, true, ["decrypt"]);
+  };
+  const unlock = async key => {
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(ENC.iv) }, key, b64(ENC.ct));
+    const d = JSON.parse(new TextDecoder().decode(pt));
+    window.ACT2026 = d.ACT2026; window.BUD2027 = d.BUD2027; window.BUDITEMS = d.BUDITEMS; window.DATA_NOTES_HTML = d.DATA_NOTES_HTML;
+    document.body.classList.remove("locked"); loginBox.remove();
+    const s = document.createElement("script"); s.textContent = document.getElementById("appsrc").textContent; document.body.appendChild(s);
+    const out = document.createElement("button"); out.textContent = "登出"; out.style.marginLeft = "auto";
+    out.onclick = () => { try { sessionStorage.removeItem("qj-key"); } catch (e) {} location.reload(); };
+    document.querySelector(".brand").appendChild(out);
+  };
+  try {
+    const raw = sessionStorage.getItem("qj-key");
+    if (raw) { await unlock(await crypto.subtle.importKey("raw", b64(raw), "AES-GCM", true, ["decrypt"])); return; }
+  } catch (e) { try { sessionStorage.removeItem("qj-key"); } catch (_) {} }
+  loginPw.focus();
+  loginForm.addEventListener("submit", async e => {
+    e.preventDefault(); loginBtn.disabled = true; loginMsg.textContent = "驗證中…";
+    let key;
+    try { key = await keyFrom(loginPw.value); await unlock(key); }
+    catch (err) { loginMsg.textContent = "密碼不正確，請再試一次。"; loginBtn.disabled = false; loginPw.select(); return; }
+    try { const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key)); sessionStorage.setItem("qj-key", btoa(String.fromCharCode.apply(null, raw))); } catch (e) {}
+  });
+})();
+</script>
+
+</body>
+</html>
